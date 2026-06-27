@@ -367,6 +367,10 @@
     ],
     "reports": [
       {
+        "file": "components/reports/GoalForm.tsx",
+        "purpose": "Create/edit financial goal modal; v3.13.23 exposes Tracking Start while editing existing goals so progress tracking can be reset without recreating the goal."
+      },
+      {
         "file": "components/reports/GoalProgressBar.tsx",
         "purpose": "Visual progress bar for individual goal completion"
       },

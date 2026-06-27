@@ -121,6 +121,7 @@ class GoalUpdate(BaseModel):
         None, pattern="^(amount_asc|amount_desc|custom)$"
     )
     time_horizon_months: Optional[int] = Field(None, ge=1, le=120)
+    start_date: Optional[datetime] = None
     target_date: Optional[datetime] = None
     is_active: Optional[bool] = None
     chart_horizon: Optional[str] = Field(None, pattern=r"^(auto|elapsed|full|[0-9]+)$")
@@ -528,6 +529,15 @@ async def update_goal(
 
     update_data = body.model_dump(exclude_unset=True)
 
+    new_start_date = update_data.pop("start_date", None)
+
+    if new_start_date is not None:
+        if new_start_date > utcnow():
+            raise HTTPException(
+                status_code=400, detail="start_date cannot be in the future"
+            )
+        goal.start_date = new_start_date
+
     # Handle target_date vs time_horizon_months
     custom_target_date = update_data.pop("target_date", None)
     if custom_target_date is not None:
@@ -548,6 +558,11 @@ async def update_goal(
     if custom_target_date is None and "time_horizon_months" in update_data:
         goal.target_date = goal.start_date + relativedelta(
             months=goal.time_horizon_months
+        )
+
+    if goal.start_date >= goal.target_date:
+        raise HTTPException(
+            status_code=400, detail="start_date must be before target_date"
         )
 
     goal.updated_at = utcnow()

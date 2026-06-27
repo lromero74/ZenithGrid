@@ -212,25 +212,31 @@ class TestFormatQuoteAmountForProduct:
         pp._PRECISION_CACHE = SAMPLE_PRECISION_DATA
         # DASH-BTC: quote_decimals=6 → 0.00010174 floors to 0.000101
         result = pp.format_quote_amount_for_product(0.00010174, "DASH-BTC")
-        assert result == "0.00010100"
+        assert result == "0.000101"
 
     def test_usd_pair_rounds_to_2(self):
-        """Happy path: USD pair floors to 2 decimals then formats to 8."""
+        """Happy path: USD pair floors to 2 decimals without extra padding."""
         pp._PRECISION_CACHE = SAMPLE_PRECISION_DATA
         result = pp.format_quote_amount_for_product(10.5678, "ETH-USD")
-        assert result == "10.56000000"
+        assert result == "10.56"
+
+    def test_gno_usd_floors_to_cent_increment(self):
+        """Regression: Coinbase rejects USD quote_size values with excess decimals."""
+        pp._PRECISION_CACHE = {"GNO-USD": {"quote_increment": "0.01", "quote_decimals": 2}}
+        result = pp.format_quote_amount_for_product(1.0145356322304402, "GNO-USD")
+        assert result == "1.01"
 
     def test_zero_amount(self):
         """Edge case: zero amount formatted correctly."""
         pp._PRECISION_CACHE = SAMPLE_PRECISION_DATA
         result = pp.format_quote_amount_for_product(0.0, "ETH-USD")
-        assert result == "0.00000000"
+        assert result == "0.00"
 
     def test_very_small_amount(self):
         """Edge case: very small BTC amount."""
         pp._PRECISION_CACHE = SAMPLE_PRECISION_DATA
         result = pp.format_quote_amount_for_product(0.000001, "DASH-BTC")
-        assert result == "0.00000100"
+        assert result == "0.000001"
 
 
 # ---------------------------------------------------------------------------
@@ -363,7 +369,7 @@ class TestFormatAmountRoundsDown:
 
     def test_quote_amount_rounds_down_not_up(self):
         pp._PRECISION_CACHE = {"TEST-BTC": {"quote_decimals": 6}}
-        assert pp.format_quote_amount_for_product(0.00010174, "TEST-BTC") == "0.00010100"
+        assert pp.format_quote_amount_for_product(0.00010174, "TEST-BTC") == "0.000101"
 
     def test_exact_value_unchanged(self):
         pp._PRECISION_CACHE = {"TEST-BTC": {"base_increment": "0.000001"}}

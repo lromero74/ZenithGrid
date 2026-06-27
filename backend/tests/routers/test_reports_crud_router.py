@@ -22,6 +22,7 @@ import json
 from datetime import timedelta
 
 import pytest
+from dateutil.relativedelta import relativedelta
 from fastapi import HTTPException
 
 from app.auth.dependencies import Perm
@@ -481,6 +482,72 @@ class TestUpdateGoal:
             )
         assert exc.value.status_code == 400
         assert "must be in the future" in exc.value.detail
+
+    @pytest.mark.asyncio
+    async def test_resets_start_date_and_preserves_custom_target_date(self, db_session):
+        """Happy path: existing goals can restart tracking without deleting the goal."""
+        user = await _make_user(db_session, "updstart@example.com")
+        goal = await _make_goal(db_session, user.id, time_horizon_months=12)
+        original_target = goal.target_date
+        reset_start = utcnow() - timedelta(days=3)
+
+        body = GoalUpdate(start_date=reset_start)
+        result = await update_goal(
+            goal_id=goal.id, body=body, db=db_session, current_user=user,
+        )
+
+        assert result["start_date"].startswith(reset_start.date().isoformat())
+        assert result["target_date"] == original_target.isoformat()
+
+    @pytest.mark.asyncio
+    async def test_resets_start_date_and_recomputes_deadline_when_horizon_is_sent(self, db_session):
+        """Edge: changing the tracking start and preset horizon keeps the duration intuitive."""
+        user = await _make_user(db_session, "updhorizon@example.com")
+        goal = await _make_goal(db_session, user.id, time_horizon_months=12)
+        reset_start = utcnow() - timedelta(days=1)
+
+        body = GoalUpdate(start_date=reset_start, time_horizon_months=6)
+        result = await update_goal(
+            goal_id=goal.id, body=body, db=db_session, current_user=user,
+        )
+
+        assert result["start_date"].startswith(reset_start.date().isoformat())
+        assert result["time_horizon_months"] == 6
+        expected_target_date = (reset_start + relativedelta(months=6)).date().isoformat()
+        assert result["target_date"].startswith(expected_target_date)
+
+    @pytest.mark.asyncio
+    async def test_rejects_future_start_date(self, db_session):
+        """Failure: tracking cannot start in the future."""
+        user = await _make_user(db_session, "updstartfuture@example.com")
+        goal = await _make_goal(db_session, user.id)
+        future_start = utcnow() + timedelta(days=1)
+
+        body = GoalUpdate(start_date=future_start)
+        with pytest.raises(HTTPException) as exc:
+            await update_goal(
+                goal_id=goal.id, body=body, db=db_session, current_user=user,
+            )
+
+        assert exc.value.status_code == 400
+        assert "start_date cannot be in the future" in exc.value.detail
+
+    @pytest.mark.asyncio
+    async def test_rejects_start_date_after_target_date(self, db_session):
+        """Failure: tracking cannot start after the goal deadline."""
+        user = await _make_user(db_session, "updstartbad@example.com")
+        goal = await _make_goal(db_session, user.id)
+        goal.target_date = utcnow() - timedelta(days=10)
+        invalid_start = utcnow() - timedelta(days=1)
+
+        body = GoalUpdate(start_date=invalid_start)
+        with pytest.raises(HTTPException) as exc:
+            await update_goal(
+                goal_id=goal.id, body=body, db=db_session, current_user=user,
+            )
+
+        assert exc.value.status_code == 400
+        assert "start_date must be before target_date" in exc.value.detail
 
     @pytest.mark.asyncio
     async def test_other_user_cannot_update(self, db_session):

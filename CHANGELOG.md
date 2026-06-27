@@ -5,6 +5,14 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v3.13.23] - 2026-06-27
+
+### Added
+- **Financial goals can reset their tracking start date.** Existing goals now expose a Tracking Start date in Reports -> Goals so old goals can be restarted after an account reset without deleting and recreating them.
+
+### Fixed
+- **Coinbase USD market buys now use the product's quote precision.** Quote sizes like the failed GNO-USD base order are floored to cents instead of being submitted with extra decimal padding, preventing Coinbase precision-related `400 Bad Request` rejects.
+
 ## [v3.13.22] - 2026-06-26
 
 ### Changed

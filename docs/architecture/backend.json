@@ -143,7 +143,7 @@
     {
       "file": "routers/reports_crud_router.py",
       "prefix": "/api/reports",
-      "purpose": "Financial goals CRUD, report schedules CRUD, generated report listing and download; _goal_to_dict() returns savings_target_count; split from reports_router.py. Registered AFTER reports_generation_router in main.py because its /{report_id} int-typed route would otherwise shadow sibling string routes."
+      "purpose": "Financial goals CRUD, report schedules CRUD, generated report listing and download; _goal_to_dict() returns savings_target_count; v3.13.23 GoalUpdate accepts start_date so existing goals can reset tracking windows without recreation, while validating start before target and no future start dates; split from reports_router.py. Registered AFTER reports_generation_router in main.py because its /{report_id} int-typed route would otherwise shadow sibling string routes."
     },
     {
       "file": "routers/transfers_router.py",
@@ -1767,7 +1767,7 @@
       },
       {
         "file": "coinbase_api/order_api.py",
-        "purpose": "Order placement, cancellation, and status"
+        "purpose": "Order placement, cancellation, and status; market buy quote_size is formatted through product_precision so USD products submit cent precision instead of padded 8-decimal values."
       },
       {
         "file": "coinbase_api/perpetuals_api.py",
@@ -1929,7 +1929,7 @@
     },
     {
       "file": "product_precision.py",
-      "purpose": "Per-product increment specification lookup from Coinbase API precision data (JSON-backed, cached)"
+      "purpose": "Per-product increment specification lookup from Coinbase API precision data (JSON-backed, cached); quote amount formatting now emits the product's actual quote decimals (e.g. GNO-USD cents) to avoid Coinbase invalid-precision 400s."
     },
     {
       "file": "trading_client.py",

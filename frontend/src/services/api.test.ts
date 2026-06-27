@@ -1370,6 +1370,13 @@ describe('reportsApi', () => {
     expect(api.put).toHaveBeenCalledWith('/reports/goals/1', { name: 'Updated' })
   })
 
+  test('updateGoal can send tracking start date reset', async () => {
+    vi.mocked(api.put).mockResolvedValue({ data: { id: 1, start_date: '2026-06-26T00:00:00' } })
+
+    await reportsApi.updateGoal(1, { start_date: '2026-06-26T00:00:00' } as any)
+    expect(api.put).toHaveBeenCalledWith('/reports/goals/1', { start_date: '2026-06-26T00:00:00' })
+  })
+
   test('deleteGoal calls correct endpoint', async () => {
     vi.mocked(api.delete).mockResolvedValue({ data: {} })
 

@@ -59,6 +59,17 @@ class TestCreateMarketOrder:
         assert "quote_size" in call_data["order_configuration"]["market_market_ioc"]
 
     @pytest.mark.asyncio
+    @patch("app.coinbase_api.order_api.time.time", return_value=1700000.000)
+    async def test_buy_with_usd_funds_uses_product_quote_precision(self, mock_time):
+        """Regression: USD market buy quote_size should use cents, not 8 decimals."""
+        mock_request = AsyncMock(return_value={"success": True})
+
+        await create_market_order(mock_request, "GNO-USD", "BUY", funds="1.0145356322304402")
+
+        call_data = mock_request.call_args[1].get("data") or mock_request.call_args[0][2]
+        assert call_data["order_configuration"]["market_market_ioc"]["quote_size"] == "1.01"
+
+    @pytest.mark.asyncio
     async def test_raises_without_size_or_funds(self):
         """Failure: raises ValueError when neither size nor funds specified."""
         mock_request = AsyncMock()

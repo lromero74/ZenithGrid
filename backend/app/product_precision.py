@@ -141,9 +141,9 @@ def format_quote_amount_for_product(amount: float, product_id: str) -> str:
     # exceed the wallet balance and trigger INSUFFICIENT_FUND / invalid-precision rejects).
     rounded = Decimal(str(amount)).quantize(Decimal(1).scaleb(-precision), rounding=ROUND_DOWN)
 
-    # Format with 8 decimal places (standard for crypto display)
-    # This pads with trailing zeros if needed
-    return f"{rounded:.8f}"
+    # Format with the product's quote precision. Coinbase validates quote_size
+    # against the product increment, so USD pairs must not be padded to 8 decimals.
+    return f"{rounded:.{precision}f}"
 
 
 async def ensure_product_precision(product_id: str) -> None:

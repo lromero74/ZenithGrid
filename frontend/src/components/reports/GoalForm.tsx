@@ -21,6 +21,7 @@ export interface GoalFormData {
   expense_period?: 'weekly' | 'monthly' | 'quarterly' | 'yearly'
   tax_withholding_pct?: number
   time_horizon_months: number
+  start_date?: string | null
   target_date?: string | null
   account_id?: number | null
 }
@@ -62,6 +63,7 @@ export function GoalForm({ isOpen, onClose, onSubmit, initialData, readOnly }: G
   const [timeHorizon, setTimeHorizon] = useState(12)
   const [dateMode, setDateMode] = useState<'horizon' | 'date'>('horizon')
   const [customDate, setCustomDate] = useState('')
+  const [trackingStartDate, setTrackingStartDate] = useState('')
   const [submitting, setSubmitting] = useState(false)
 
   useEffect(() => {
@@ -76,6 +78,7 @@ export function GoalForm({ isOpen, onClose, onSubmit, initialData, readOnly }: G
       setExpensePeriod(initialData.expense_period || 'monthly')
       setTaxWithholding(initialData.tax_withholding_pct ? String(initialData.tax_withholding_pct) : '')
       setTimeHorizon(initialData.time_horizon_months)
+      setTrackingStartDate(initialData.start_date ? initialData.start_date.split('T')[0] : '')
 
       // Detect if stored date matches a preset horizon
       const isPreset = HORIZON_OPTIONS.some(o => o.value === initialData.time_horizon_months)
@@ -115,6 +118,7 @@ export function GoalForm({ isOpen, onClose, onSubmit, initialData, readOnly }: G
       setTimeHorizon(12)
       setDateMode('horizon')
       setCustomDate('')
+      setTrackingStartDate('')
     }
   }, [initialData, isOpen])
 
@@ -135,6 +139,10 @@ export function GoalForm({ isOpen, onClose, onSubmit, initialData, readOnly }: G
         expense_period: targetType === 'expenses' ? expensePeriod : undefined,
         tax_withholding_pct: targetType === 'expenses' ? (parseFloat(taxWithholding) || 0) : undefined,
         time_horizon_months: timeHorizon,
+      }
+
+      if (initialData && trackingStartDate) {
+        formData.start_date = `${trackingStartDate}T00:00:00`
       }
 
       if (dateMode === 'date' && customDate) {
@@ -318,6 +326,21 @@ export function GoalForm({ isOpen, onClose, onSubmit, initialData, readOnly }: G
                   className="w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white focus:outline-none focus:border-blue-500"
                 />
               </div>
+            </div>
+          )}
+
+          {initialData && (
+            <div>
+              <label className="block text-sm font-medium text-slate-300 mb-1">Tracking Start</label>
+              <input
+                type="date"
+                value={trackingStartDate}
+                onChange={e => setTrackingStartDate(e.target.value)}
+                max={new Date().toISOString().split('T')[0]}
+                required
+                className="w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white focus:outline-none focus:border-blue-500 [color-scheme:dark]"
+              />
+              <p className="text-xs text-slate-500 mt-1">Where progress tracking should begin</p>
             </div>
           )}
 
