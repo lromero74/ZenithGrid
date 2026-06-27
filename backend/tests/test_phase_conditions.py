@@ -428,6 +428,18 @@ class TestEvaluateSingleConditionComparisons:
         assert "error" in detail
         assert "None" in detail["error"]
 
+    def test_indicator_value_none_reports_missing_timeframe_history(self, evaluator):
+        """Failure: capture_details explains when a timeframe lacks enough candles."""
+        condition = {"type": "rsi", "operator": "greater_than", "value": 30, "timeframe": "ONE_DAY"}
+        indicators = {"ONE_DAY_missing_reason": "not enough ONE_DAY candles: 11/30"}
+
+        result, detail = evaluator._evaluate_single_condition(
+            condition, indicators, None, capture_details=True,
+        )
+
+        assert result is False
+        assert detail["error"] == "not enough ONE_DAY candles: 11/30"
+
 
 # ---------------------------------------------------------------------------
 # _evaluate_single_condition — crossing operators

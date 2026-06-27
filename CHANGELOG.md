@@ -5,6 +5,12 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v3.13.24] - 2026-06-27
+
+### Fixed
+- **Daily RSI logs now explain missing history instead of saying `indicator value is None`.** When a one-day indicator cannot be computed because a product is too new or sparse, the Indicator Evaluation Log now reports the candle shortage, such as `not enough ONE_DAY candles: 11/30`.
+- **Auto-add skips products that cannot satisfy one-day entry conditions yet.** Bots with `ONE_DAY` entry indicators no longer automatically onboard brand-new Coinbase listings until enough daily candles exist for those conditions to evaluate.
+
 ## [v3.13.23] - 2026-06-27
 
 ### Added

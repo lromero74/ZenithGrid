@@ -1369,7 +1369,7 @@
     },
     {
       "file": "services/delisted_pair_monitor.py",
-      "purpose": "Daily sync of trading pairs; removes delisted pairs from bots (checks both product_ids list and legacy product_id field); detects unresolvable paper-account coin balances via _get_unresolvable_coins() and publishes the result to the module-level _unresolvable_paper_coins set so paper_trading_client can suppress repeated 404 pricing requests",
+      "purpose": "Daily sync of trading pairs; removes delisted pairs from bots (checks both product_ids list and legacy product_id field); detects unresolvable paper-account coin balances via _get_unresolvable_coins() and publishes the result to the module-level _unresolvable_paper_coins set so paper_trading_client can suppress repeated 404 pricing requests; v3.13.24 auto-add skips candidates when a bot requires ONE_DAY entry indicators but the candidate lacks enough daily candle history",
       "type": "background"
     },
     {
@@ -1804,7 +1804,7 @@
     {
       "file": "strategies/indicator_based_indicators.py",
       "class": "IndicatorCalculationMixin",
-      "purpose": "Per-cycle indicator snapshot methods extracted from indicator_based.py. IndicatorCalculationMixin provides the methods that compute and cache indicator values (RSI, MACD, Bollinger Bands, EMA, etc.) for a single candle window; IndicatorBasedStrategy composes this mixin rather than inheriting a bloated base class. Extracted to keep indicator_based.py under the 1200-LOC cap."
+      "purpose": "Per-cycle indicator snapshot methods extracted from indicator_based.py. IndicatorCalculationMixin provides the methods that compute and cache indicator values (RSI, MACD, Bollinger Bands, EMA, etc.) for a single candle window; IndicatorBasedStrategy composes this mixin rather than inheriting a bloated base class. Extracted to keep indicator_based.py under the 1200-LOC cap. v3.13.24 records missing timeframe-history reasons such as not enough ONE_DAY candles so evaluation logs explain sparse/new products."
     },
     {
       "file": "strategies/spatial_arbitrage.py",
@@ -1901,7 +1901,7 @@
     },
     {
       "file": "phase_conditions.py",
-      "purpose": "Advanced condition grouping with AND/OR/NOT logic (phase-based)"
+      "purpose": "Advanced condition grouping with AND/OR/NOT logic (phase-based); v3.13.24 surfaces missing timeframe-history reasons in captured condition details instead of the generic indicator value is None message when available"
     },
     {
       "file": "coinbase_unified_client.py",

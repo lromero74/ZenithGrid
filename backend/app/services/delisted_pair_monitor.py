@@ -20,6 +20,7 @@ from app.models import Bot, BotProduct, Account
 from app.services.exchange_service import get_exchange_client_for_account
 from app.services.session_maker_mixin import SessionMakerMixin
 from app.multi_bot_monitor import filter_pairs_by_allowed_categories
+from app.utils.candle_utils import get_timeframes_for_phases
 
 logger = logging.getLogger(__name__)
 
@@ -46,6 +47,9 @@ _STABLECOIN_TICKERS = frozenset({
     "USD", "USDC", "USDT", "DAI", "GUSD", "PAX", "BUSD",
     "USDP", "PYUSD", "EURC", "EURT", "USDS", "USD1",
 })
+
+_AUTO_ADD_MIN_DAILY_CANDLES = 30
+_AUTO_ADD_DAILY_LOOKBACK_DAYS = 100
 
 
 def is_stable_pair(product_id: str) -> bool:
@@ -179,6 +183,57 @@ class TradingPairMonitor(SessionMakerMixin):
         elif "-USD" in first_pair:
             return "USD"
         return None
+
+    async def _filter_auto_add_pairs_by_entry_history(self, pairs: Set[str], bot: Bot) -> Set[str]:
+        """Skip auto-add candidates that cannot satisfy the bot's entry history requirements."""
+        if not pairs:
+            return pairs
+
+        strategy_config = bot.strategy_config or {}
+        entry_timeframes = get_timeframes_for_phases(strategy_config, ["base_order_conditions"])
+        if "ONE_DAY" not in entry_timeframes:
+            return pairs
+
+        if not self._exchange_client:
+            logger.warning(
+                "Bot '%s' (id=%s): cannot verify ONE_DAY history for auto-add candidates; "
+                "skipping %d candidates",
+                bot.name, bot.id, len(pairs),
+            )
+            return set()
+
+        now = int(utcnow().timestamp())
+        start = now - (_AUTO_ADD_DAILY_LOOKBACK_DAYS * 86400)
+        eligible: Set[str] = set()
+
+        for product_id in sorted(pairs):
+            try:
+                candles = await self._exchange_client.get_candles(
+                    product_id=product_id,
+                    start=start,
+                    end=now,
+                    granularity="ONE_DAY",
+                )
+            except Exception as exc:
+                logger.warning(
+                    "Bot '%s' (id=%s): skipping auto-add candidate %s; "
+                    "ONE_DAY history check failed: %s",
+                    bot.name, bot.id, product_id, exc,
+                )
+                continue
+
+            candle_count = len(candles or [])
+            if candle_count < _AUTO_ADD_MIN_DAILY_CANDLES:
+                logger.info(
+                    "Bot '%s' (id=%s): skipping auto-add candidate %s; "
+                    "not enough ONE_DAY candles: %d/%d",
+                    bot.name, bot.id, product_id, candle_count, _AUTO_ADD_MIN_DAILY_CANDLES,
+                )
+                continue
+
+            eligible.add(product_id)
+
+        return eligible
 
     def _is_stable_candidate_by_price(self, product: Dict) -> bool:
         """
@@ -496,6 +551,8 @@ class TradingPairMonitor(SessionMakerMixin):
                             new_pairs = set(filtered)
                         else:
                             new_pairs = candidate_pairs
+
+                        new_pairs = await self._filter_auto_add_pairs_by_entry_history(new_pairs, bot)
 
                     changes_made = False
                     bot_change = {

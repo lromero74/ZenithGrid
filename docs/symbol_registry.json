@@ -2781,6 +2781,7 @@
     "classes": {
       "TradingPairMonitor": [
         "__init__",
+        "_filter_auto_add_pairs_by_entry_history",
         "_get_quote_currency",
         "_get_unresolvable_coins",
         "_is_stable_candidate_by_price",

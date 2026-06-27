@@ -272,9 +272,11 @@ class PhaseConditionEvaluator:
         # Get current indicator value
         current_val = self._get_indicator_value(condition_type, condition, current_indicators)
         if current_val is None:
-            logger.debug(f"Condition {condition_type} on {timeframe}: indicator value is None")
+            missing_reason = current_indicators.get(f"{timeframe}_missing_reason")
+            error = missing_reason or "indicator value is None"
+            logger.debug(f"Condition {condition_type} on {timeframe}: {error}")
             if capture_details:
-                detail["error"] = "indicator value is None"
+                detail["error"] = error
                 return False, detail
             return False
 

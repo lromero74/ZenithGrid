@@ -328,6 +328,53 @@ class TestCheckAndSyncPairs:
 
     @pytest.mark.asyncio
     @patch('app.database.async_session_maker')
+    async def test_auto_add_skips_pairs_without_required_daily_history(self, mock_session_maker):
+        """Auto-add should not add products before ONE_DAY entry indicators are computable."""
+        mock_db = AsyncMock()
+        mock_session_maker.return_value.__aenter__ = AsyncMock(return_value=mock_db)
+        mock_session_maker.return_value.__aexit__ = AsyncMock(return_value=False)
+
+        mock_bot = MagicMock()
+        mock_bot.id = 1
+        mock_bot.name = "DailyRsiBot"
+        mock_bot.product_id = None
+        mock_bot.product_ids = ["ETH-USD"]
+        mock_bot.products = []
+        mock_bot.strategy_config = {
+            "auto_add_new_pairs": True,
+            "base_order_conditions": [
+                {"type": "rsi", "operator": "greater_than", "value": 30, "timeframe": "ONE_DAY"},
+            ],
+        }
+        bot_result = MagicMock()
+        bot_result.scalars.return_value.all.return_value = [mock_bot]
+        mock_db.execute = AsyncMock(return_value=bot_result)
+
+        monitor = TradingPairMonitor()
+        available = {"ETH-USD", "O-USD", "EIGEN-USD"}
+        monitor._btc_pairs = set()
+        monitor._usd_pairs = {"ETH-USD", "O-USD", "EIGEN-USD"}
+        monitor._exchange_client = AsyncMock()
+
+        async def get_candles(product_id, start, end, granularity):
+            del start, end
+            assert granularity == "ONE_DAY"
+            if product_id == "O-USD":
+                return [{}] * 11
+            return [{}] * 30
+
+        monitor._exchange_client.get_candles.side_effect = get_candles
+
+        with patch.object(monitor, 'get_available_products', new_callable=AsyncMock, return_value=available):
+            results = await monitor.check_and_sync_pairs()
+
+        assert results["pairs_added"] == 1
+        assert "EIGEN-USD" in mock_bot.product_ids
+        assert "O-USD" not in mock_bot.product_ids
+        mock_db.commit.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    @patch('app.database.async_session_maker')
     async def test_no_changes_needed(self, mock_session_maker):
         """Edge case: all pairs match, no changes needed."""
         mock_db = AsyncMock()

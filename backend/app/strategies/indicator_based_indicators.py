@@ -93,6 +93,9 @@ class IndicatorCalculationMixin:
         for timeframe, tf_required in tf_to_indicators.items():
             tf_candles = candles_by_timeframe.get(timeframe, candles)
             if len(tf_candles) < min_candles_needed:
+                current_indicators[f"{timeframe}_missing_reason"] = (
+                    f"not enough {timeframe} candles: {len(tf_candles)}/{min_candles_needed}"
+                )
                 continue
 
             # calculate_previous=True enables crossing detection by calculating
