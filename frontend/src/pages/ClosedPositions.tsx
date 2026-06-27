@@ -72,7 +72,7 @@ function ClosedPositions() {
   })
 
   // API now filters by account_id on server side
-  const failedOrders = failedOrdersData?.items || []
+  const failedOrders = useMemo(() => failedOrdersData?.items || [], [failedOrdersData])
   const failedTotal = failedOrdersData?.total || 0
   const failedTotalPages = failedOrdersData?.total_pages || 1
 

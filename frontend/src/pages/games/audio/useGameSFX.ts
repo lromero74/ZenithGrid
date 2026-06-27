@@ -133,12 +133,14 @@ export function useGameSFX(gameId: string): GameSFXControls {
 
   // Cleanup on unmount
   useEffect(() => {
+    // Capture the (stable, mutated-in-place) ambient-loop map for cleanup.
+    const ambient = ambientRef.current
     return () => {
       // Stop all ambient loops
-      for (const interval of ambientRef.current.values()) {
+      for (const interval of ambient.values()) {
         clearInterval(interval)
       }
-      ambientRef.current.clear()
+      ambient.clear()
       // Dispose engine
       engineRef.current?.dispose()
       engineRef.current = null

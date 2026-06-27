@@ -86,8 +86,9 @@ function DCABudgetConfigForm({
 
   // Clean up timeouts on unmount
   useEffect(() => {
+    const timeouts = errorTimeoutRef.current
     return () => {
-      Object.values(errorTimeoutRef.current).forEach(clearTimeout)
+      Object.values(timeouts).forEach(clearTimeout)
     }
   }, [])
 

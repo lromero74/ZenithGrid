@@ -75,7 +75,7 @@ export default function Settings() {
             message: 'Next recalibration check will run in 30 days.',
           })
         }
-      } catch (err) {
+      } catch {
         addToast({
           type: 'error',
           title: applyToken ? 'Could not apply proposal' : 'Could not dismiss calibration alert',
