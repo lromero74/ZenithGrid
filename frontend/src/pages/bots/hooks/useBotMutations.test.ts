@@ -11,7 +11,7 @@ import { renderHook, act, waitFor } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import React from 'react'
 import { useBotMutations } from './useBotMutations'
-import type { Bot } from '../../../types'
+import type { Bot, BotCreate } from '../../../types'
 
 // ---------- Mocks ----------
 
@@ -48,7 +48,7 @@ function createWrapper() {
   }
 }
 
-function createDefaultProps(overrides: Record<string, any> = {}) {
+function createDefaultProps(overrides: Record<string, unknown> = {}) {
   return {
     selectedAccount: { id: 1 },
     bots: [
@@ -79,13 +79,13 @@ describe('useBotMutations', () => {
 
   test('createBot calls botsApi.create and resets form on success', async () => {
     const botData = { name: 'New Bot', strategy_type: 'dca_bot_v2', strategy_config: {}, product_id: 'ETH-BTC' }
-    vi.mocked(botsApi.create).mockResolvedValue({ id: 3, ...botData } as any)
+    vi.mocked(botsApi.create).mockResolvedValue({ id: 3, ...botData } as unknown as Bot)
 
     const props = createDefaultProps()
     const { result } = renderHook(() => useBotMutations(props), { wrapper: createWrapper() })
 
     await act(async () => {
-      result.current.createBot.mutate(botData as any)
+      result.current.createBot.mutate(botData as unknown as BotCreate)
     })
 
     await waitFor(() => {
@@ -108,7 +108,7 @@ describe('useBotMutations', () => {
     const { result } = renderHook(() => useBotMutations(props), { wrapper: createWrapper() })
 
     await act(async () => {
-      result.current.createBot.mutate({ name: 'Dup' } as any)
+      result.current.createBot.mutate({ name: 'Dup' } as unknown as BotCreate)
     })
 
     await waitFor(() => {
@@ -141,7 +141,7 @@ describe('useBotMutations', () => {
     const { result } = renderHook(() => useBotMutations(props), { wrapper: createWrapper() })
 
     await act(async () => {
-      result.current.createBot.mutate({} as any)
+      result.current.createBot.mutate({} as unknown as BotCreate)
     })
 
     await waitFor(() => {
@@ -158,7 +158,7 @@ describe('useBotMutations', () => {
   // ---- updateBot ----
 
   test('updateBot calls botsApi.update and resets form on success', async () => {
-    vi.mocked(botsApi.update).mockResolvedValue({ id: 1, name: 'Updated' } as any)
+    vi.mocked(botsApi.update).mockResolvedValue({ id: 1, name: 'Updated' } as unknown as Bot)
 
     const props = createDefaultProps()
     const { result } = renderHook(() => useBotMutations(props), { wrapper: createWrapper() })
@@ -179,7 +179,7 @@ describe('useBotMutations', () => {
   // ---- deleteBot ----
 
   test('deleteBot calls botsApi.delete', async () => {
-    vi.mocked(botsApi.delete).mockResolvedValue({ message: 'Deleted' } as any)
+    vi.mocked(botsApi.delete).mockResolvedValue({ message: 'Deleted' })
 
     const props = createDefaultProps()
     const { result } = renderHook(() => useBotMutations(props), { wrapper: createWrapper() })
@@ -198,7 +198,7 @@ describe('useBotMutations', () => {
   // ---- startBot ----
 
   test('startBot calls botsApi.start', async () => {
-    vi.mocked(botsApi.start).mockResolvedValue({ message: 'Started' } as any)
+    vi.mocked(botsApi.start).mockResolvedValue({ message: 'Started' })
 
     const props = createDefaultProps()
     const { result } = renderHook(() => useBotMutations(props), { wrapper: createWrapper() })
@@ -217,7 +217,7 @@ describe('useBotMutations', () => {
   // ---- stopBot ----
 
   test('stopBot calls botsApi.stop', async () => {
-    vi.mocked(botsApi.stop).mockResolvedValue({ message: 'Stopped' } as any)
+    vi.mocked(botsApi.stop).mockResolvedValue({ message: 'Stopped' })
 
     const props = createDefaultProps()
     const { result } = renderHook(() => useBotMutations(props), { wrapper: createWrapper() })
@@ -237,7 +237,7 @@ describe('useBotMutations', () => {
 
   test('cloneBot calls botsApi.clone and triggers onCloneSuccess callback', async () => {
     const clonedBot = { id: 10, name: 'Bot Alpha (Clone)' } as Bot
-    vi.mocked(botsApi.clone).mockResolvedValue(clonedBot as any)
+    vi.mocked(botsApi.clone).mockResolvedValue(clonedBot as unknown as Bot)
 
     const onCloneSuccess = vi.fn()
     const props = createDefaultProps({ onCloneSuccess })
@@ -258,7 +258,7 @@ describe('useBotMutations', () => {
   // ---- copyToAccount ----
 
   test('copyToAccount calls botsApi.copyToAccount', async () => {
-    vi.mocked(botsApi.copyToAccount).mockResolvedValue({ id: 11 } as any)
+    vi.mocked(botsApi.copyToAccount).mockResolvedValue({ id: 11 } as unknown as Bot)
 
     const props = createDefaultProps()
     const { result } = renderHook(() => useBotMutations(props), { wrapper: createWrapper() })
@@ -277,7 +277,7 @@ describe('useBotMutations', () => {
   // ---- forceRunBot ----
 
   test('forceRunBot calls botsApi.forceRun', async () => {
-    vi.mocked(botsApi.forceRun).mockResolvedValue({ message: 'Running', note: '' } as any)
+    vi.mocked(botsApi.forceRun).mockResolvedValue({ message: 'Running', note: '' })
 
     const props = createDefaultProps()
     const { result } = renderHook(() => useBotMutations(props), { wrapper: createWrapper() })
@@ -300,7 +300,7 @@ describe('useBotMutations', () => {
       cancelled_count: 5,
       failed_count: 0,
       errors: [],
-    } as any)
+    })
 
     const props = createDefaultProps()
     const { result } = renderHook(() => useBotMutations(props), { wrapper: createWrapper() })
@@ -328,7 +328,7 @@ describe('useBotMutations', () => {
       cancelled_count: 3,
       failed_count: 2,
       errors: ['Order not found'],
-    } as any)
+    })
 
     const props = createDefaultProps()
     const { result } = renderHook(() => useBotMutations(props), { wrapper: createWrapper() })
@@ -357,7 +357,7 @@ describe('useBotMutations', () => {
       failed_count: 0,
       total_profit_quote: 0.00123456,
       errors: [],
-    } as any)
+    })
 
     const props = createDefaultProps()
     const { result } = renderHook(() => useBotMutations(props), { wrapper: createWrapper() })
@@ -385,7 +385,7 @@ describe('useBotMutations', () => {
       failed_count: 1,
       total_profit_quote: 0.001,
       errors: ['Insufficient liquidity'],
-    } as any)
+    })
 
     const props = createDefaultProps()
     const { result } = renderHook(() => useBotMutations(props), { wrapper: createWrapper() })

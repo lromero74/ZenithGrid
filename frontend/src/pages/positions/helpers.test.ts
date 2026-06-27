@@ -7,6 +7,8 @@
 
 import { describe, test, expect } from 'vitest'
 import { calculateUnrealizedPnL, calculateOverallStats } from './helpers'
+import type { Position } from '../../types'
+import type { PositionWithPnL } from './helpers'
 
 describe('calculateUnrealizedPnL', () => {
   test('calculates PnL for BTC-quoted position with current price', () => {
@@ -17,7 +19,7 @@ describe('calculateUnrealizedPnL', () => {
       total_base_acquired: 10,
       total_quote_spent: 0.5,
       btc_usd_price_at_open: 50000,
-    } as any
+    } as unknown as Position
 
     const result = calculateUnrealizedPnL(position, 0.06, 67000)
     expect(result).not.toBeNull()
@@ -37,7 +39,7 @@ describe('calculateUnrealizedPnL', () => {
       total_base_acquired: 10,
       total_quote_spent: 0.5,
       btc_usd_price_at_open: 50000,
-    } as any
+    } as unknown as Position
 
     const result = calculateUnrealizedPnL(position)
     expect(result).not.toBeNull()
@@ -47,7 +49,7 @@ describe('calculateUnrealizedPnL', () => {
   })
 
   test('returns null for non-open position', () => {
-    const position = { status: 'closed' } as any
+    const position = { status: 'closed' } as unknown as Position
     expect(calculateUnrealizedPnL(position)).toBeNull()
   })
 
@@ -59,7 +61,7 @@ describe('calculateUnrealizedPnL', () => {
       total_base_acquired: 0,
       total_quote_spent: 0,
       btc_usd_price_at_open: 50000,
-    } as any
+    } as unknown as Position
 
     const result = calculateUnrealizedPnL(position, 100)
     expect(result).not.toBeNull()
@@ -75,7 +77,7 @@ describe('calculateUnrealizedPnL', () => {
       total_base_acquired: 1,
       total_quote_spent: 60000,
       btc_usd_price_at_open: 60000,
-    } as any
+    } as unknown as Position
 
     // Current BTC price is $60100 → $100 profit
     const result = calculateUnrealizedPnL(position, 60100, 60100)
@@ -93,7 +95,7 @@ describe('calculateUnrealizedPnL', () => {
       total_base_acquired: 10,
       total_quote_spent: 0.5,
       btc_usd_price_at_open: 50000,
-    } as any
+    } as unknown as Position
 
     // PnL = 0.1 BTC, live BTC price = 67000
     const result = calculateUnrealizedPnL(position, 0.06, 67000)
@@ -109,7 +111,7 @@ describe('calculateUnrealizedPnL', () => {
       total_base_acquired: 10,
       total_quote_spent: 0.5,
       btc_usd_price_at_open: 50000,
-    } as any
+    } as unknown as Position
 
     const result = calculateUnrealizedPnL(position, 0.06) // no btcUsdPrice
     expect(result).not.toBeNull()
@@ -120,15 +122,15 @@ describe('calculateUnrealizedPnL', () => {
     const btcQuoted = {
       status: 'open', product_id: 'ETH-BTC',
       average_buy_price: 1, total_base_acquired: 1, total_quote_spent: 1, btc_usd_price_at_open: 50000,
-    } as any
+    } as unknown as Position
     const usdQuoted = {
       status: 'open', product_id: 'BTC-USD',
       average_buy_price: 1, total_base_acquired: 1, total_quote_spent: 1, btc_usd_price_at_open: 50000,
-    } as any
+    } as unknown as Position
     const usdcQuoted = {
       status: 'open', product_id: 'ETH-USDC',
       average_buy_price: 1, total_base_acquired: 1, total_quote_spent: 1, btc_usd_price_at_open: 50000,
-    } as any
+    } as unknown as Position
 
     expect(calculateUnrealizedPnL(btcQuoted)!.quoteCurrency).toBe('BTC')
     expect(calculateUnrealizedPnL(usdQuoted)!.quoteCurrency).toBe('USD')
@@ -143,7 +145,7 @@ describe('calculateUnrealizedPnL', () => {
       total_base_acquired: 2,
       total_quote_spent: 200,
       btc_usd_price_at_open: 50000,
-    } as any
+    } as unknown as Position
 
     const result = calculateUnrealizedPnL(position, 110) // 20 XYZ profit
     expect(result).not.toBeNull()
@@ -168,7 +170,7 @@ describe('calculateOverallStats', () => {
         max_quote_allowed: 0.5,
         _cachedPnL: { quote: -0.02, quoteCurrency: 'BTC', usd: -1000 },
       },
-    ] as any[]
+    ] as unknown as PositionWithPnL[]
 
     const stats = calculateOverallStats(positions)
     expect(stats.activeTrades).toBe(2)
@@ -199,7 +201,7 @@ describe('calculateOverallStats', () => {
         max_quote_allowed: 100000,
         _cachedPnL: { quote: 0, quoteCurrency: 'USD', usd: 0 },
       },
-    ] as any[]
+    ] as unknown as PositionWithPnL[]
 
     const stats = calculateOverallStats(positions)
     expect(stats.reservedByQuote.BTC).toBeCloseTo(0.5)
@@ -221,7 +223,7 @@ describe('calculateOverallStats', () => {
         max_quote_allowed: 100000,
         _cachedPnL: { quote: 100, quoteCurrency: 'USD', usd: 100 },
       },
-    ] as any[]
+    ] as unknown as PositionWithPnL[]
 
     const stats = calculateOverallStats(positions)
     expect(stats.uPnLUSD).toBeCloseTo(3450) // 3350 + 100
@@ -241,7 +243,7 @@ describe('calculateOverallStats', () => {
         max_quote_allowed: 100000,
         _cachedPnL: { quote: 100, quoteCurrency: 'USD', usd: 100 },
       },
-    ] as any[]
+    ] as unknown as PositionWithPnL[]
 
     const stats = calculateOverallStats(positions)
     expect(stats.uPnLByQuote['BTC']).toBeCloseTo(0.05)
