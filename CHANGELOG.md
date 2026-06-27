@@ -5,6 +5,11 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v3.13.19] - 2026-06-26
+
+### Fixed
+- **Trader scheduling no longer holds its parent database transaction while bots run.** The trader now closes the scheduler's bot-discovery session before launching per-bot processing tasks; each bot still reloads itself in its own isolated session, and each pair keeps its separate session. This reduces `idle in transaction` pressure from the trader without changing order logic.
+
 ## [v3.13.18] - 2026-06-26
 
 ### Added

@@ -926,7 +926,9 @@ class MultiBotMonitor:
             self, db, bot, product_id, pre_analyzed_signal=signal_data, pair_data=pair_data, commit=False
         )
 
-    async def _process_single_bot(self, bot: Bot, needs_ai_analysis: bool, bot_check_interval: int = None) -> None:
+    async def _process_single_bot(
+        self, bot_id: int, bot_name: str, needs_ai_analysis: bool, bot_check_interval: int = None,
+    ) -> None:
         """
         Process a single bot with its own DB session and exchange context.
 
@@ -937,24 +939,25 @@ class MultiBotMonitor:
         async with self._bot_semaphore:
             async with async_session_maker() as db:
                 try:
+                    # Re-fetch bot in this task's session. The scheduler's parent
+                    # session is intentionally closed before concurrent work starts.
+                    result = await db.execute(select(Bot).where(Bot.id == bot_id))
+                    local_bot = result.scalar_one_or_none()
+                    if not local_bot:
+                        logger.warning(f"Bot {bot_id} not found in DB")
+                        return
+
                     # Get exchange client for this bot (per-user/per-account)
-                    exchange = await self.get_exchange_for_bot(db, bot)
+                    exchange = await self.get_exchange_for_bot(db, local_bot)
                     if not exchange:
                         logger.warning(
-                            f"No exchange client for bot {bot.name}"
-                            f" (account_id={bot.account_id})"
+                            f"No exchange client for bot {local_bot.name}"
+                            f" (account_id={local_bot.account_id})"
                         )
                         return
 
                     # Set exchange in task-local context (each asyncio.Task gets its own copy)
                     _ctx_exchange.set(exchange)
-
-                    # Re-fetch bot in this session to avoid detached instance errors
-                    result = await db.execute(select(Bot).where(Bot.id == bot.id))
-                    local_bot = result.scalar_one_or_none()
-                    if not local_bot:
-                        logger.warning(f"Bot {bot.id} not found in DB")
-                        return
 
                     # Set per-task slippage simulation flag for paper trading
                     simulate_slippage_ctx.set(
@@ -980,7 +983,7 @@ class MultiBotMonitor:
                         bot_check_interval = calculate_bot_check_interval(local_bot.strategy_config or {})
                     current_timestamp = int(utcnow().timestamp())
                     next_check_timestamp = next_check_time_aligned(bot_check_interval, current_timestamp)
-                    self._bot_next_check[bot.id] = next_check_timestamp
+                    self._bot_next_check[bot_id] = next_check_timestamp
                     next_check_in = next_check_timestamp - current_timestamp
                     logger.debug(
                         f"📅 {local_bot.name}: Next check in {next_check_in}s "
@@ -988,7 +991,7 @@ class MultiBotMonitor:
                     )
 
                 except Exception as e:
-                    logger.error(f"Error processing bot {bot.name}: {e}", exc_info=True)
+                    logger.error(f"Error processing bot {bot_name}: {e}", exc_info=True)
 
     async def monitor_loop(self):
         """Main monitoring loop for all active bots"""
@@ -1011,6 +1014,12 @@ class MultiBotMonitor:
                 self._pair_concurrency = new_pair
                 self._bot_semaphore = asyncio.Semaphore(self._bot_concurrency)
             try:
+                bots_to_process: List[tuple] = []  # (bot_id, bot_name, needs_ai_analysis, bot_check_interval)
+                active_bot_ids: set[int] = set()
+                active_pairs: set[tuple] = set()
+                all_active_pairs: set[str] = set()
+                has_active_bots = False
+
                 async with async_session_maker() as db:
                     # Get all active bots
                     logger.debug("Calling get_active_bots()...")
@@ -1020,6 +1029,7 @@ class MultiBotMonitor:
                     if not bots:
                         logger.warning("No active bots to monitor")
                     else:
+                        has_active_bots = True
                         logger.debug(f"Monitoring {len(bots)} active bot(s)")
 
                         # On first iteration after restart, stagger bots to avoid
@@ -1035,8 +1045,9 @@ class MultiBotMonitor:
                                 f"{(len(bots) // 5) * 2}s to reduce startup DB contention"
                             )
 
-                        # Determine which bots are due for processing
-                        bots_to_process: List[tuple] = []  # (bot, needs_ai_analysis)
+                        # Determine which bots are due for processing. Build a
+                        # scalar work list so the parent DB session can close
+                        # before the expensive per-bot/pair tasks run.
                         for bot in bots:
                             try:
                                 logger.debug(f"Checking bot: {bot.name} (ID: {bot.id})")
@@ -1082,76 +1093,82 @@ class MultiBotMonitor:
                                         f"(candle interval: {bot_check_interval}s)"
                                     )
 
-                                bots_to_process.append((bot, needs_ai_analysis))
+                                bots_to_process.append((bot.id, bot.name, needs_ai_analysis, bot_check_interval))
                             except Exception as e:
                                 logger.error(f"Error scheduling bot {bot.name}: {e}")
                                 continue
 
-                        # Process bots concurrently (semaphore limits to 5 at a time)
-                        if bots_to_process:
-                            logger.debug(f"Processing {len(bots_to_process)} bot(s) concurrently (max 5 parallel)")
-                            tasks = [
-                                asyncio.create_task(
-                                    self._process_single_bot(
-                                        bot, needs_ai,
-                                        bot_check_interval=calculate_bot_check_interval(bot.strategy_config or {}),
-                                    ),
-                                    name=f"bot-{bot.id}-{bot.name}"
-                                )
-                                for bot, needs_ai in bots_to_process
-                            ]
-                            await asyncio.gather(*tasks, return_exceptions=True)
-                            logger.debug(f"Finished processing {len(bots_to_process)} bot(s)")
-
-                        # Prune stale entries from unbounded caches
+                        # Snapshot active IDs/pairs while ORM relationships are
+                        # still attached; pruning happens after the session closes.
                         active_bot_ids = {b.id for b in bots}
-                        active_pairs = set()
                         for b in bots:
                             for p in b.get_trading_pairs():
                                 active_pairs.add((b.id, p))
+                                all_active_pairs.add(p)
 
-                        # Prune _previous_indicators_cache
-                        stale_indicator_keys = [
-                            k for k in self._previous_indicators_cache
-                            if k not in active_pairs
-                        ]
-                        for k in stale_indicator_keys:
-                            del self._previous_indicators_cache[k]
-                        if stale_indicator_keys:
-                            logger.debug(
-                                f"Pruned {len(stale_indicator_keys)} stale "
-                                "entries from indicators cache"
-                            )
+                # Process bots concurrently only after the scheduler's parent
+                # session has closed. Each bot task opens its own short-lived
+                # session and each pair task still uses its own isolated session.
+                if bots_to_process:
+                    logger.debug(
+                        f"Processing {len(bots_to_process)} bot(s) concurrently "
+                        f"(max {self._bot_concurrency} parallel)"
+                    )
+                    tasks = [
+                        asyncio.create_task(
+                            self._process_single_bot(
+                                bot_id, bot_name, needs_ai,
+                                bot_check_interval=bot_check_interval,
+                            ),
+                            name=f"bot-{bot_id}-{bot_name}"
+                        )
+                        for bot_id, bot_name, needs_ai, bot_check_interval in bots_to_process
+                    ]
+                    await asyncio.gather(*tasks, return_exceptions=True)
+                    logger.debug(f"Finished processing {len(bots_to_process)} bot(s)")
 
-                        # Prune _bot_next_check for deleted/deactivated bots
-                        stale_schedule_keys = [
-                            bid for bid in self._bot_next_check
-                            if bid not in active_bot_ids
-                        ]
-                        for bid in stale_schedule_keys:
-                            del self._bot_next_check[bid]
+                if has_active_bots:
+                    # Prune stale entries from unbounded caches
 
-                        # Prune _candle_cache for pairs no longer tracked by any bot
-                        all_active_pairs = set()
-                        for b in bots:
-                            all_active_pairs.update(b.get_trading_pairs())
-                        # Cache keys are "product:granularity:lookback"; the
-                        # product id is the FIRST segment. (rsplit(":",1)[0] left
-                        # "product:granularity", which never matched the bare
-                        # product in all_active_pairs, so the cache was pruned
-                        # entirely every cycle → a fresh fetch per pair per tick.)
-                        stale_candle_keys = [
-                            k for k in self._candle_cache
-                            if k.split(":", 1)[0] not in all_active_pairs
-                        ]
-                        for k in stale_candle_keys:
-                            del self._candle_cache[k]
-                            self._candle_fetch_locks.pop(k, None)
-                        if stale_candle_keys:
-                            logger.debug(
-                                f"Pruned {len(stale_candle_keys)} stale "
-                                "entries from candle cache"
-                            )
+                    # Prune _previous_indicators_cache
+                    stale_indicator_keys = [
+                        k for k in self._previous_indicators_cache
+                        if k not in active_pairs
+                    ]
+                    for k in stale_indicator_keys:
+                        del self._previous_indicators_cache[k]
+                    if stale_indicator_keys:
+                        logger.debug(
+                            f"Pruned {len(stale_indicator_keys)} stale "
+                            "entries from indicators cache"
+                        )
+
+                    # Prune _bot_next_check for deleted/deactivated bots
+                    stale_schedule_keys = [
+                        bid for bid in self._bot_next_check
+                        if bid not in active_bot_ids
+                    ]
+                    for bid in stale_schedule_keys:
+                        del self._bot_next_check[bid]
+
+                    # Prune _candle_cache for pairs no longer tracked by any bot
+                    # Cache keys are "product:granularity:lookback"; the
+                    # product id is the FIRST segment. (rsplit(":",1)[0] left
+                    # "product:granularity", which never matched the bare
+                    # product in all_active_pairs, so the cache was pruned
+                    # entirely every cycle → a fresh fetch per pair per tick.)
+                    stale_candle_keys = [
+                        k for k in self._candle_cache
+                        if k.split(":", 1)[0] not in all_active_pairs
+                    ]
+                    for k in stale_candle_keys:
+                        del self._candle_cache[k]
+                        self._candle_fetch_locks.pop(k, None)
+                    if stale_candle_keys:
+                        logger.debug(
+                            f"Pruned {len(stale_candle_keys)} stale "
+                            "entries from candle cache"
+                        )
 
                 record_server_timing("TRADER", "monitor_loop", (time.perf_counter() - loop_started_at) * 1000)
 

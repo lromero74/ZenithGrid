@@ -1913,7 +1913,7 @@
     },
     {
       "file": "multi_bot_monitor.py",
-      "purpose": "Monitors prices for all active bots and dispatches strategy signals; concurrent per-pair processing via asyncio.gather() with asyncio.Semaphore(PAIR_CONCURRENCY=5) and per-pair DB sessions; sequential inter-pair batch sleep removed"
+      "purpose": "Monitors prices for all active bots and dispatches strategy signals; scheduler closes the parent bot-discovery DB session before launching concurrent per-bot work, each bot reloads in its own session, and concurrent per-pair processing uses isolated per-pair DB sessions"
     },
     {
       "file": "order_validation.py",

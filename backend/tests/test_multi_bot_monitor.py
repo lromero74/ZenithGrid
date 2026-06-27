@@ -1252,12 +1252,22 @@ class TestProcessSingleBot:
         monitor = MultiBotMonitor()
         bot = _make_bot(account_id=99)
 
+        from app.models import Bot as BotModel
+        real_bot = BotModel(
+            id=bot.id, name=bot.name, user_id=bot.user_id,
+            strategy_type=bot.strategy_type, is_active=True,
+            account_id=bot.account_id, strategy_config={}, check_interval_seconds=300,
+            budget_percentage=10.0, product_ids=["ETH-BTC"],
+        )
+        db_session.add(real_bot)
+        await db_session.flush()
+
         with patch.object(monitor, "get_exchange_for_bot", new_callable=AsyncMock, return_value=None), \
              patch("app.multi_bot_monitor.async_session_maker") as mock_sm:
             mock_sm.return_value.__aenter__ = AsyncMock(return_value=db_session)
             mock_sm.return_value.__aexit__ = AsyncMock(return_value=False)
             # Should not raise despite missing exchange
-            await monitor._process_single_bot(bot, needs_ai_analysis=False)
+            await monitor._process_single_bot(bot.id, bot.name, needs_ai_analysis=False)
 
     @pytest.mark.asyncio
     async def test_catches_exception_in_processing(self, db_session):
@@ -1278,14 +1288,14 @@ class TestProcessSingleBot:
             real_bot = BotModel(
                 id=bot.id, name=bot.name, user_id=bot.user_id,
                 strategy_type=bot.strategy_type, is_active=True,
-                strategy_config={}, check_interval_seconds=300,
+                account_id=bot.account_id, strategy_config={}, check_interval_seconds=300,
                 budget_percentage=10.0, product_ids=["ETH-BTC"],
             )
             db_session.add(real_bot)
             await db_session.flush()
 
             # Should not raise
-            await monitor._process_single_bot(bot, needs_ai_analysis=True)
+            await monitor._process_single_bot(bot.id, bot.name, needs_ai_analysis=True)
 
 
 # ===========================================================================
@@ -1349,8 +1359,8 @@ class TestMonitorLoop:
 
         process_calls = []
 
-        async def _track_process(bot, needs_ai_analysis, **_kwargs):
-            process_calls.append(bot.id)
+        async def _track_process(bot_id, bot_name, needs_ai_analysis, **_kwargs):
+            process_calls.append(bot_id)
 
         async def _get_bots_then_stop(*_args, **_kwargs):
             monitor.running = False
@@ -1365,6 +1375,38 @@ class TestMonitorLoop:
 
         assert due_bot.id in process_calls
         assert not_due_bot.id not in process_calls
+
+    @pytest.mark.asyncio
+    async def test_parent_session_closes_before_processing_due_bots(self, db_session):
+        """Trader scheduler should not hold the parent DB transaction while
+        per-bot processing runs in isolated sessions."""
+        monitor = MultiBotMonitor()
+        monitor.running = True
+        due_bot = _make_bot(bot_id=1, name="Due")
+        session_exited = {"value": False}
+
+        async def _get_bots_then_stop(*_args, **_kwargs):
+            monitor.running = False
+            return [due_bot]
+
+        async def _track_process(bot_id, bot_name, needs_ai_analysis, **_kwargs):
+            assert session_exited["value"] is True
+            assert bot_id == due_bot.id
+            assert bot_name == due_bot.name
+
+        async def _exit(*_args, **_kwargs):
+            session_exited["value"] = True
+            return False
+
+        with patch("app.multi_bot_monitor.async_session_maker") as mock_sm, \
+             patch.object(monitor, "get_active_bots", side_effect=_get_bots_then_stop), \
+             patch.object(monitor, "_process_single_bot", side_effect=_track_process), \
+             patch("app.multi_bot_monitor.asyncio.sleep", new=self._noop_sleep):
+            mock_sm.return_value.__aenter__ = AsyncMock(return_value=db_session)
+            mock_sm.return_value.__aexit__ = AsyncMock(side_effect=_exit)
+            await monitor.monitor_loop()
+
+        assert session_exited["value"] is True
 
     @pytest.mark.asyncio
     async def test_staggers_first_iteration_when_many_bots(self, db_session):
@@ -1438,8 +1480,8 @@ class TestMonitorLoop:
 
         process_calls = []
 
-        async def _track_process(bot, needs_ai_analysis, **_kwargs):
-            process_calls.append(bot.id)
+        async def _track_process(bot_id, bot_name, needs_ai_analysis, **_kwargs):
+            process_calls.append(bot_id)
 
         async def _get_bots_then_stop(*_args, **_kwargs):
             monitor.running = False
