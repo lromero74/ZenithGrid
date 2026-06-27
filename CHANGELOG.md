@@ -5,6 +5,11 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v3.13.26] - 2026-06-27
+
+### Changed
+- **Expense goal trend status now separates funding from pace.** The trend chart can show `0.90% Covered • Underfunded` and `On Track` at the same time, making it clear when a goal still needs funding but the actual line is ahead of the ideal schedule.
+
 ## [v3.13.25] - 2026-06-27
 
 ### Fixed

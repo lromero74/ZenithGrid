@@ -7,12 +7,17 @@ import {
 import { TrendingUp, X } from 'lucide-react'
 import { reportsApi } from '../../services/api'
 import type { GoalTrendData, GoalTrendPoint } from '../../types'
+import { isPaceOnTrack } from './goalTrendStatus'
 
 interface GoalTrendChartProps {
   goalId: number
   goalName: string
   targetCurrency: 'USD' | 'BTC'
   onClose: () => void
+}
+
+function formatCoveragePct(value: number): string {
+  return value.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 }
 
 /** Compute the chart's visible end date based on horizon setting. */
@@ -104,11 +109,12 @@ function clipPoints(
   return clipped
 }
 
-function CustomTooltip({ active, payload, label, targetCurrency }: {
+function CustomTooltip({ active, payload, label, targetCurrency, targetType }: {
   active?: boolean
   payload?: Array<{ payload: GoalTrendPoint }>
   label?: string
   targetCurrency: string
+  targetType: string
 }) {
   if (!active || !payload || !payload.length) return null
 
@@ -116,6 +122,9 @@ function CustomTooltip({ active, payload, label, targetCurrency }: {
   if (!point) return null
 
   const isBtc = targetCurrency === 'BTC'
+  const isExpenseGoal = targetType === 'expenses'
+  const paceOnTrack = isPaceOnTrack(point)
+  const coveragePct = typeof point.progress_pct === 'number' ? point.progress_pct : null
   const format = (v: number) =>
     isBtc
       ? `${v.toFixed(8)} BTC`
@@ -133,7 +142,7 @@ function CustomTooltip({ active, payload, label, targetCurrency }: {
           <div className="flex items-center gap-2">
             <div className="w-3 h-0.5 bg-blue-400" />
             <span className="text-sm text-slate-300">Actual: </span>
-            <span className={`text-sm font-semibold ${point.on_track ? 'text-emerald-400' : 'text-amber-400'}`}>
+            <span className={`text-sm font-semibold ${paceOnTrack ? 'text-emerald-400' : 'text-amber-400'}`}>
               {format(point.current_value)}
             </span>
           </div>
@@ -143,10 +152,17 @@ function CustomTooltip({ active, payload, label, targetCurrency }: {
           <span className="text-sm text-slate-300">Ideal: </span>
           <span className="text-sm text-slate-400">{format(point.ideal_value)}</span>
         </div>
-        {point.progress_pct != null && (
+        {coveragePct != null && (
           <div className="text-xs text-slate-500 mt-1">
-            Progress: {point.progress_pct.toFixed(1)}%
-            {point.on_track ? ' — On track' : ' — Behind target'}
+            {isExpenseGoal ? 'Coverage' : 'Progress'}: {formatCoveragePct(coveragePct)}%
+            {isExpenseGoal
+              ? ` — ${coveragePct >= 100 ? 'Funded' : 'Underfunded'}`
+              : paceOnTrack ? ' — On track' : ' — Behind target'}
+          </div>
+        )}
+        {isExpenseGoal && point.current_value != null && (
+          <div className={`text-xs ${paceOnTrack ? 'text-emerald-400' : 'text-amber-400'}`}>
+            Pace: {paceOnTrack ? 'On track' : 'Behind ideal'}
           </div>
         )}
       </div>
@@ -267,7 +283,10 @@ export function GoalTrendChart({ goalId, goalName, targetCurrency, onClose }: Go
   // Use the last real data point (skip projected endpoint where on_track is null)
   const realPoints = clippedPoints.filter(p => p.on_track != null)
   const lastPoint = realPoints.length > 0 ? realPoints[realPoints.length - 1] : clippedPoints[0]
-  const isOnTrack = lastPoint?.on_track
+  const paceOnTrack = isPaceOnTrack(lastPoint)
+  const isExpenseGoal = data.goal.target_type === 'expenses'
+  const coveragePct = typeof lastPoint?.progress_pct === 'number' ? lastPoint.progress_pct : null
+  const fundingStatus = coveragePct != null && coveragePct >= 100 ? 'Funded' : 'Underfunded'
 
   // Minimap viewport boundaries (date strings)
   const minimapFirstDate = fullPoints.length > 0 ? fullPoints[0].date : ''
@@ -280,16 +299,25 @@ export function GoalTrendChart({ goalId, goalName, targetCurrency, onClose }: Go
             <TrendingUp className="w-4 h-4 text-blue-400" />
             {goalName} — Progress Trend
           </h4>
-          <div className="flex items-center gap-3 mt-1 text-xs text-slate-400">
+          <div className="flex flex-wrap items-center gap-2 mt-1 text-xs text-slate-400">
             <span>
               Target: {isBtc ? `${data.goal.target_value} BTC` : `$${data.goal.target_value.toLocaleString()}`}
             </span>
+            {isExpenseGoal && coveragePct != null && (
+              <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded ${
+                coveragePct >= 100
+                  ? 'bg-emerald-900/40 text-emerald-400 border border-emerald-800/50'
+                  : 'bg-rose-900/30 text-rose-300 border border-rose-800/40'
+              }`}>
+                {formatCoveragePct(coveragePct)}% Covered • {fundingStatus}
+              </span>
+            )}
             <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded ${
-              isOnTrack
+              paceOnTrack
                 ? 'bg-emerald-900/40 text-emerald-400 border border-emerald-800/50'
                 : 'bg-amber-900/40 text-amber-400 border border-amber-800/50'
             }`}>
-              {isOnTrack ? 'On Track' : 'Behind Target'}
+              {paceOnTrack ? 'On Track' : isExpenseGoal ? 'Behind Pace' : 'Behind Target'}
             </span>
           </div>
         </div>
@@ -321,7 +349,7 @@ export function GoalTrendChart({ goalId, goalName, targetCurrency, onClose }: Go
                 tickFormatter={formatValue}
                 width={65}
               />
-              <Tooltip content={<CustomTooltip targetCurrency={targetCurrency} />} />
+              <Tooltip content={<CustomTooltip targetCurrency={targetCurrency} targetType={data.goal.target_type} />} />
               <Legend
                 wrapperStyle={{ paddingTop: '8px' }}
                 iconType="line"

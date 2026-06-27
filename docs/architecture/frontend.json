@@ -376,7 +376,7 @@
       },
       {
         "file": "components/reports/GoalTrendChart.tsx",
-        "purpose": "Recharts ComposedChart showing actual vs ideal goal progress over time with on-track status"
+        "purpose": "Recharts ComposedChart showing actual vs ideal goal progress over time; v3.13.26 separates expense-goal funding coverage (Funded/Underfunded) from actual-vs-ideal pace (On Track/Behind Pace)."
       },
       {
         "file": "components/reports/ReportViewModal.tsx",
