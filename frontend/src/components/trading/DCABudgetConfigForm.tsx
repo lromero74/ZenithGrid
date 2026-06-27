@@ -92,9 +92,9 @@ function DCABudgetConfigForm({
     }
   }, [])
 
-  const updateConfig = (key: string, value: unknown) => {
+  const updateConfig = useCallback((key: string, value: unknown) => {
     onChange({ ...config, [key]: value })
-  }
+  }, [config, onChange])
 
   // Determine if this is a fiat (USD-based) or crypto (BTC-based) bot
   const isFiatQuote = ['USD', 'USDC', 'USDT', 'EUR'].includes(quoteCurrency)
@@ -158,6 +158,10 @@ function DCABudgetConfigForm({
         })
       }
     }
+    // This effect WRITES config (via onChange) when the budget calculator is on.
+    // It must key only on the budget inputs, not on `config`/`onChange` — depending
+    // on the config it produces would re-trigger itself in an infinite loop.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [useBudgetCalculator, budgetPercentage, maxConcurrentDeals, effectiveDealsForMath,
       config.max_concurrent_deals, config.max_safety_orders, config.safety_order_volume_scale,
       aggregateValue, exchangeMinimum])
@@ -202,7 +206,13 @@ function DCABudgetConfigForm({
     let baseSize: number
 
     if (config.base_order_type === 'fixed') {
-      baseSize = getBaseOrderSize()
+      // Inlined getBaseOrderSize() to keep this memo's deps explicit (the helper
+      // is defined below and also used in the form inputs).
+      baseSize = config.base_order_size !== undefined
+        ? config.base_order_size
+        : config.base_order_btc !== undefined
+          ? config.base_order_btc
+          : (isFiatQuote ? 10 : 0.001)
     } else {
       // Calculate from percentage
       if (!aggregateValue || aggregateValue <= 0) return 10
@@ -215,7 +225,7 @@ function DCABudgetConfigForm({
     const minSoPct = (exchangeMinimum / baseSize) * 100
     // Round up to nearest 1%
     return Math.max(10, Math.ceil(minSoPct))
-  }, [aggregateValue, exchangeMinimum, config.base_order_percentage, config.base_order_type, config.base_order_size])
+  }, [aggregateValue, exchangeMinimum, config.base_order_percentage, config.base_order_type, config.base_order_size, config.base_order_btc, isFiatQuote])
 
   // Use generic key names that work for both BTC and USD
   // Backend will store as base_order_size/safety_order_size with quote_currency
