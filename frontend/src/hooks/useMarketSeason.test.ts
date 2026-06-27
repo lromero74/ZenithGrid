@@ -23,7 +23,7 @@ vi.mock('../utils/seasonDetection', () => ({
 }))
 
 import { authFetch } from '../services/api'
-import { determineMarketSeason } from '../utils/seasonDetection'
+import { determineMarketSeason, type SeasonInfo } from '../utils/seasonDetection'
 
 // ---------- Helpers ----------
 
@@ -87,7 +87,7 @@ describe('useMarketSeason', () => {
     vi.mocked(determineMarketSeason).mockReturnValue({
       season: 'bull', name: 'Summer', subtitle: 'Bull Market',
       description: 'Prices rising', progress: 50, confidence: 70,
-      icon: {} as any, color: 'text-green-400',
+      icon: {} as unknown as SeasonInfo['icon'], color: 'text-green-400',
       bgGradient: 'from-green-900/30 to-emerald-900/20',
       signals: ['50 days post-halving'],
     })
@@ -110,7 +110,7 @@ describe('useMarketSeason', () => {
     vi.mocked(determineMarketSeason).mockReturnValue({
       season: 'distribution', name: 'Fall', subtitle: 'Distribution Phase',
       description: 'Peak euphoria', progress: 30, confidence: 80,
-      icon: {} as any, color: 'text-orange-400',
+      icon: {} as unknown as SeasonInfo['icon'], color: 'text-orange-400',
       bgGradient: 'from-orange-900/30 to-red-900/20',
       signals: [],
     })
@@ -133,7 +133,7 @@ describe('useMarketSeason', () => {
     vi.mocked(determineMarketSeason).mockReturnValue({
       season: 'bull', name: 'Summer', subtitle: 'Bull Market',
       description: 'Prices rising', progress: 50, confidence: 70,
-      icon: {} as any, color: 'text-green-400',
+      icon: {} as unknown as SeasonInfo['icon'], color: 'text-green-400',
       bgGradient: 'from-green-900/30 to-emerald-900/20',
       signals: [],
     })
@@ -151,7 +151,7 @@ describe('useMarketSeason', () => {
     vi.mocked(determineMarketSeason).mockReturnValue({
       season: 'accumulation', name: 'Spring', subtitle: 'Accumulation Phase',
       description: 'Smart money buying', progress: 40, confidence: 60,
-      icon: {} as any, color: 'text-pink-400',
+      icon: {} as unknown as SeasonInfo['icon'], color: 'text-pink-400',
       bgGradient: 'from-pink-900/30 to-rose-900/20',
       signals: [],
     })
@@ -169,7 +169,7 @@ describe('useMarketSeason', () => {
     vi.mocked(determineMarketSeason).mockReturnValue({
       season: 'bear', name: 'Winter', subtitle: 'Bear Market',
       description: 'Prices falling', progress: 60, confidence: 50,
-      icon: {} as any, color: 'text-blue-400',
+      icon: {} as unknown as SeasonInfo['icon'], color: 'text-blue-400',
       bgGradient: 'from-blue-900/30 to-slate-900/20',
       signals: [],
     })
@@ -187,7 +187,7 @@ describe('useMarketSeason', () => {
     vi.mocked(determineMarketSeason).mockReturnValue({
       season: 'distribution', name: 'Fall', subtitle: 'Distribution Phase',
       description: 'Peak euphoria', progress: 20, confidence: 75,
-      icon: {} as any, color: 'text-orange-400',
+      icon: {} as unknown as SeasonInfo['icon'], color: 'text-orange-400',
       bgGradient: 'from-orange-900/30 to-red-900/20',
       signals: [],
     })
@@ -226,7 +226,7 @@ describe('useMarketSeason', () => {
     vi.mocked(determineMarketSeason).mockReturnValue({
       season: 'bull', name: 'Summer', subtitle: 'Bull Market',
       description: 'Prices rising', progress: 50, confidence: 70,
-      icon: {} as any, color: 'text-green-400',
+      icon: {} as unknown as SeasonInfo['icon'], color: 'text-green-400',
       bgGradient: 'from-green-900/30 to-emerald-900/20',
       signals: [],
     })
@@ -252,7 +252,7 @@ describe('useMarketSeason', () => {
     vi.mocked(determineMarketSeason).mockReturnValue({
       season: 'accumulation', name: 'Spring', subtitle: 'Accumulation Phase',
       description: 'Smart money buying', progress: 40, confidence: 55,
-      icon: {} as any, color: 'text-pink-400',
+      icon: {} as unknown as SeasonInfo['icon'], color: 'text-pink-400',
       bgGradient: 'from-pink-900/30 to-rose-900/20',
       signals: ['Fear & Greed at 30'],
     })

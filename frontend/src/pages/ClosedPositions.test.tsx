@@ -100,7 +100,7 @@ describe('ClosedPositions polling policy', () => {
 
     const observerOptions = queries
       .filter((query) => JSON.stringify(query.queryKey) === JSON.stringify(['order-history-failed-paginated', 7, 1]))
-      .flatMap((query) => query.observers.map((observer: any) => observer.options))
+      .flatMap((query) => query.observers.map((observer: { options: { refetchInterval?: unknown; refetchIntervalInBackground?: unknown; refetchOnWindowFocus?: unknown } }) => observer.options))
 
     expect(observerOptions).toHaveLength(1)
     expect(observerOptions[0].refetchInterval).toBe(60000)

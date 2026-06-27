@@ -9,6 +9,8 @@
 import { describe, test, expect, beforeEach, afterEach, vi } from 'vitest'
 import { renderHook, act } from '@testing-library/react'
 import { useIndicators } from './useIndicators'
+import type { MutableRefObject } from 'react'
+import type { IChartApi, ISeriesApi, SeriesType, Time, Range } from 'lightweight-charts'
 
 // Mock lightweight-charts
 vi.mock('lightweight-charts', () => ({
@@ -68,11 +70,11 @@ vi.mock('../../../components/charts', () => ({}))
 
 function createDefaultProps() {
   return {
-    chartRef: { current: null } as any,
+    chartRef: { current: null } as MutableRefObject<IChartApi | null>,
     selectedPair: 'BTC-USD',
-    indicatorChartsRef: { current: new Map() } as any,
+    indicatorChartsRef: { current: new Map() } as MutableRefObject<Map<string, IChartApi>>,
     syncAllChartsToRange: vi.fn(),
-    syncCallbacksRef: { current: new Map() } as any,
+    syncCallbacksRef: { current: new Map() } as MutableRefObject<Map<string, (r: Range<Time> | null) => void>>,
   }
 }
 
@@ -249,14 +251,14 @@ describe('useIndicators removeIndicator', () => {
         unsubscribeVisibleTimeRangeChange: vi.fn(),
       })),
     }
-    const indicatorChartsRef = { current: new Map([['rsi-100', mockChart as any]]) }
+    const indicatorChartsRef = { current: new Map([['rsi-100', mockChart as unknown as IChartApi]]) }
 
     const savedIndicators = [
       { id: 'rsi-100', name: 'RSI', type: 'rsi', enabled: true, settings: { period: 14 }, series: [] },
     ]
     localStorage.setItem('chart-indicators', JSON.stringify(savedIndicators))
 
-    const props = { ...createDefaultProps(), indicatorChartsRef: indicatorChartsRef as any }
+    const props = { ...createDefaultProps(), indicatorChartsRef: indicatorChartsRef as unknown as MutableRefObject<Map<string, IChartApi>> }
     const { result } = renderHook(() => useIndicators(props))
 
     act(() => { result.current.removeIndicator('rsi-100') })
@@ -356,7 +358,7 @@ describe('useIndicators modal and search state', () => {
   test('sets and clears editingIndicator', () => {
     const { result } = renderHook(() => useIndicators(createDefaultProps()))
 
-    const mockIndicator = { id: 'sma-1', name: 'SMA', type: 'sma', enabled: true, settings: {}, series: [] as any[] }
+    const mockIndicator = { id: 'sma-1', name: 'SMA', type: 'sma', enabled: true, settings: {}, series: [] as ISeriesApi<SeriesType>[] }
 
     act(() => { result.current.setEditingIndicator(mockIndicator) })
     expect(result.current.editingIndicator).toEqual(mockIndicator)
@@ -387,7 +389,7 @@ describe('useIndicators renderIndicators', () => {
     // chartRef.current is null by default
     expect(() => {
       result.current.renderIndicators([
-        { time: 1700000000 as any, open: 100, high: 110, low: 90, close: 105, volume: 1000 },
+        { time: 1700000000 as Time, open: 100, high: 110, low: 90, close: 105, volume: 1000 },
       ])
     }).not.toThrow()
   })

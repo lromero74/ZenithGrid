@@ -185,10 +185,10 @@ describe('Positions polling policy', () => {
 
     const observerOptions = queries
       .filter((query) => targetKeys.includes(JSON.stringify(query.queryKey)))
-      .flatMap((query) => query.observers.map((observer: any) => observer.options))
+      .flatMap((query) => query.observers.map((observer: { options: { refetchInterval?: unknown; refetchIntervalInBackground?: unknown; refetchOnWindowFocus?: unknown } }) => observer.options))
 
     expect(observerOptions).toHaveLength(1)
-    observerOptions.forEach((options: any) => {
+    observerOptions.forEach((options: { refetchInterval?: unknown; refetchIntervalInBackground?: unknown; refetchOnWindowFocus?: unknown }) => {
       expect(options.refetchInterval).toBe(120000)
       expect(options.refetchIntervalInBackground).toBe(false)
       expect(options.refetchOnWindowFocus).toBe(false)

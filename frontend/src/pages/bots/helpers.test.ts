@@ -11,6 +11,7 @@ import {
   botUsesBullFlagIndicator,
   botUsesNonAIIndicators,
 } from './helpers'
+import type { Bot } from '../../types'
 
 describe('conditionUsesAI', () => {
   test('returns true for ai_buy type', () => {
@@ -32,7 +33,7 @@ describe('conditionUsesAI', () => {
 
 describe('botUsesAIIndicators', () => {
   test('returns true for ai_autonomous strategy', () => {
-    const bot = { strategy_type: 'ai_autonomous', strategy_config: {} } as any
+    const bot = { strategy_type: 'ai_autonomous', strategy_config: {} } as unknown as Bot
     expect(botUsesAIIndicators(bot)).toBe(true)
   })
 
@@ -42,7 +43,7 @@ describe('botUsesAIIndicators', () => {
       strategy_config: {
         base_order_conditions: [{ type: 'ai_buy' }],
       },
-    } as any
+    } as unknown as Bot
     expect(botUsesAIIndicators(bot)).toBe(true)
   })
 
@@ -54,7 +55,7 @@ describe('botUsesAIIndicators', () => {
           groups: [{ conditions: [{ type: 'ai_buy' }] }],
         },
       },
-    } as any
+    } as unknown as Bot
     expect(botUsesAIIndicators(bot)).toBe(true)
   })
 
@@ -64,19 +65,19 @@ describe('botUsesAIIndicators', () => {
       strategy_config: {
         base_order_conditions: [{ type: 'rsi' }],
       },
-    } as any
+    } as unknown as Bot
     expect(botUsesAIIndicators(bot)).toBe(false)
   })
 
   test('returns false when no config', () => {
-    const bot = { strategy_type: 'dca', strategy_config: null } as any
+    const bot = { strategy_type: 'dca', strategy_config: null } as unknown as Bot
     expect(botUsesAIIndicators(bot)).toBe(false)
   })
 })
 
 describe('botUsesBullFlagIndicator', () => {
   test('returns true for bull_flag strategy type', () => {
-    const bot = { strategy_type: 'bull_flag', strategy_config: {} } as any
+    const bot = { strategy_type: 'bull_flag', strategy_config: {} } as unknown as Bot
     expect(botUsesBullFlagIndicator(bot)).toBe(true)
   })
 
@@ -86,7 +87,7 @@ describe('botUsesBullFlagIndicator', () => {
       strategy_config: {
         base_order_conditions: [{ type: 'bull_flag' }],
       },
-    } as any
+    } as unknown as Bot
     expect(botUsesBullFlagIndicator(bot)).toBe(true)
   })
 
@@ -94,12 +95,12 @@ describe('botUsesBullFlagIndicator', () => {
     const bot = {
       strategy_type: 'dca',
       strategy_config: { base_order_conditions: [{ type: 'rsi' }] },
-    } as any
+    } as unknown as Bot
     expect(botUsesBullFlagIndicator(bot)).toBe(false)
   })
 
   test('returns false when no config', () => {
-    const bot = { strategy_type: 'dca', strategy_config: null } as any
+    const bot = { strategy_type: 'dca', strategy_config: null } as unknown as Bot
     expect(botUsesBullFlagIndicator(bot)).toBe(false)
   })
 })
@@ -111,7 +112,7 @@ describe('botUsesNonAIIndicators', () => {
       strategy_config: {
         base_order_conditions: [{ type: 'rsi' }],
       },
-    } as any
+    } as unknown as Bot
     expect(botUsesNonAIIndicators(bot)).toBe(true)
   })
 
@@ -121,7 +122,7 @@ describe('botUsesNonAIIndicators', () => {
       strategy_config: {
         base_order_conditions: [{ type: 'ai_buy' }],
       },
-    } as any
+    } as unknown as Bot
     expect(botUsesNonAIIndicators(bot)).toBe(false)
   })
 
@@ -131,7 +132,7 @@ describe('botUsesNonAIIndicators', () => {
       strategy_config: {
         base_order_conditions: [{ type: 'rsi' }],
       },
-    } as any
+    } as unknown as Bot
     expect(botUsesNonAIIndicators(bot)).toBe(false)
   })
 
@@ -143,7 +144,7 @@ describe('botUsesNonAIIndicators', () => {
           groups: [{ conditions: [{ type: 'rsi' }] }],
         },
       },
-    } as any
+    } as unknown as Bot
     expect(botUsesNonAIIndicators(bot)).toBe(true)
   })
 })

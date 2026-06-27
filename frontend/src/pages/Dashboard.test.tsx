@@ -85,7 +85,7 @@ describe('Dashboard startup query deferral', () => {
         type: 'cex',
         is_paper_trading: true,
       },
-    } as any)
+    } as unknown as ReturnType<typeof useAccount>)
 
     vi.mocked(botsApi.getAll).mockResolvedValue([
       {
@@ -96,13 +96,13 @@ describe('Dashboard startup query deferral', () => {
         product_id: 'ETH-USD',
         strategy_type: 'grid',
       },
-    ] as any)
+    ] as unknown as Awaited<ReturnType<typeof botsApi.getAll>>)
     vi.mocked(botsApi.getStats).mockResolvedValue({
       open_positions: 1,
       max_concurrent_deals: 3,
       total_profit_quote: 12.34,
       quote_currency: 'USD',
-    } as any)
+    } as unknown as Awaited<ReturnType<typeof botsApi.getStats>>)
     vi.mocked(positionsApi.getAll).mockImplementation(async (status?: string) => {
       if (status === 'open') {
         return [
@@ -114,7 +114,7 @@ describe('Dashboard startup query deferral', () => {
             total_quote_spent: 100,
             product_id: 'ETH-USD',
           },
-        ] as any
+        ] as unknown as Awaited<ReturnType<typeof positionsApi.getAll>>
       }
       return [
         {
@@ -128,15 +128,15 @@ describe('Dashboard startup query deferral', () => {
           total_quote_spent: 100,
           product_id: 'ETH-USD',
         },
-      ] as any
+      ] as unknown as Awaited<ReturnType<typeof positionsApi.getAll>>
     })
     vi.mocked(authFetch).mockResolvedValue({
       ok: true,
       json: () => Promise.resolve({ reserved_usd: 0, reserved_btc: 0 }),
-    } as any)
+    } as unknown as Awaited<ReturnType<typeof authFetch>>)
     vi.mocked(transfersApi.getRecentSummary).mockResolvedValue({
       last_30d_net_deposits_usd: 0,
-    } as any)
+    } as unknown as Awaited<ReturnType<typeof transfersApi.getRecentSummary>>)
   })
 
   afterEach(() => {
@@ -180,7 +180,7 @@ describe('Dashboard startup query deferral', () => {
         is_paper_trading: true,
         prop_firm: null,
       },
-    } as any)
+    } as unknown as ReturnType<typeof useAccount>)
 
     render(<Dashboard onNavigate={vi.fn()} />, { wrapper: createWrapper() })
 

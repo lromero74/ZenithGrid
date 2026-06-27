@@ -63,7 +63,7 @@ describe('usePositionMutations handleClosePosition', () => {
       usePositionMutations({ refetchPositions: refetch })
     )
 
-    let closeResult: any
+    let closeResult: { success: boolean; slippageBlocked?: boolean; slippageWarning?: string } | undefined
     await act(async () => {
       closeResult = await result.current.handleClosePosition(42)
     })
@@ -102,7 +102,7 @@ describe('usePositionMutations handleClosePosition', () => {
       usePositionMutations({ refetchPositions: refetch })
     )
 
-    let closeResult: any
+    let closeResult: { success: boolean; slippageBlocked?: boolean; slippageWarning?: string } | undefined
     await act(async () => {
       closeResult = await result.current.handleClosePosition(42)
     })
@@ -142,7 +142,7 @@ describe('usePositionMutations handleClosePosition', () => {
       usePositionMutations({ refetchPositions: refetch })
     )
 
-    let closeResult: any
+    let closeResult: { success: boolean; slippageBlocked?: boolean; slippageWarning?: string } | undefined
     await act(async () => {
       closeResult = await result.current.handleClosePosition(42)
     })
@@ -205,7 +205,7 @@ describe('usePositionMutations handleSaveNotes', () => {
       usePositionMutations({ refetchPositions: refetch })
     )
 
-    let saveResult: any
+    let saveResult: { success: boolean } | undefined
     await act(async () => {
       saveResult = await result.current.handleSaveNotes(10, 'My position notes')
     })
@@ -236,7 +236,7 @@ describe('usePositionMutations handleSaveNotes', () => {
       usePositionMutations({ refetchPositions: refetch })
     )
 
-    let saveResult: any
+    let saveResult: { success: boolean } | undefined
     await act(async () => {
       saveResult = await result.current.handleSaveNotes(10, 'notes')
     })
@@ -257,7 +257,7 @@ describe('usePositionMutations handleCancelLimitClose', () => {
       usePositionMutations({ refetchPositions: refetch })
     )
 
-    let cancelResult: any
+    let cancelResult: { success: boolean } | undefined
     await act(async () => {
       cancelResult = await result.current.handleCancelLimitClose(5)
     })
@@ -277,7 +277,7 @@ describe('usePositionMutations handleCancelLimitClose', () => {
       usePositionMutations({ refetchPositions: refetch })
     )
 
-    let cancelResult: any
+    let cancelResult: { success: boolean } | undefined
     await act(async () => {
       cancelResult = await result.current.handleCancelLimitClose(5)
     })

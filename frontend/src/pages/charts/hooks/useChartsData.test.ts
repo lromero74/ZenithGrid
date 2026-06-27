@@ -188,7 +188,7 @@ describe('useChartsData TRADING_PAIRS', () => {
     expect(result.current.TRADING_PAIRS[1].value).toBe('ETH-USD')
     expect(result.current.TRADING_PAIRS[2].value).toBe('SOL-USD')
     // All fallback pairs should have inPortfolio false
-    expect(result.current.TRADING_PAIRS.every((p: any) => p.inPortfolio === false)).toBe(true)
+    expect(result.current.TRADING_PAIRS.every((p: { inPortfolio: boolean }) => p.inPortfolio === false)).toBe(true)
   })
 
   test('generates pairs from products data with portfolio indicator', async () => {
@@ -227,8 +227,8 @@ describe('useChartsData TRADING_PAIRS', () => {
       expect(result.current.productsData).toBeDefined()
     })
 
-    const btcPair = result.current.TRADING_PAIRS.find((p: any) => p.value === 'BTC-USD')
-    const solPair = result.current.TRADING_PAIRS.find((p: any) => p.value === 'SOL-USD')
+    const btcPair = result.current.TRADING_PAIRS.find((p: { value: string }) => p.value === 'BTC-USD')
+    const solPair = result.current.TRADING_PAIRS.find((p: { value: string }) => p.value === 'SOL-USD')
 
     expect(btcPair).toBeDefined()
     expect(btcPair!.inPortfolio).toBe(true)

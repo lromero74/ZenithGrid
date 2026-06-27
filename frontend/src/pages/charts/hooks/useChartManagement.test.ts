@@ -7,7 +7,8 @@
 
 import { describe, test, expect, beforeEach, afterEach, vi } from 'vitest'
 import { renderHook, act, render, waitFor } from '@testing-library/react'
-import { createElement } from 'react'
+import { createElement, type MutableRefObject } from 'react'
+import type { IChartApi, Time } from 'lightweight-charts'
 
 // Build a mock chart factory
 function createMockSeries() {
@@ -55,7 +56,7 @@ function createMockChart() {
 let lastCreatedChart: ReturnType<typeof createMockChart>
 
 vi.mock('lightweight-charts', () => ({
-  createChart: vi.fn((_container: any, _options: any) => {
+  createChart: vi.fn((_container: unknown, _options: unknown) => {
     lastCreatedChart = createMockChart()
     return lastCreatedChart
   }),
@@ -88,7 +89,7 @@ import { createChart } from 'lightweight-charts'
 beforeEach(() => {
   vi.restoreAllMocks()
   // Clear the last created chart reference
-  lastCreatedChart = undefined as any
+  lastCreatedChart = undefined as unknown as ReturnType<typeof createMockChart>
 })
 
 afterEach(() => {
@@ -100,7 +101,7 @@ describe('useChartManagement initialization', () => {
     const indicatorChartsRef = { current: new Map() }
 
     const { result } = renderHook(() =>
-      useChartManagement('candlestick', 'BTC-USD', indicatorChartsRef as any)
+      useChartManagement('candlestick', 'BTC-USD', indicatorChartsRef as unknown as MutableRefObject<Map<string, IChartApi>>)
     )
 
     expect(result.current.chartContainerRef).toBeDefined()
@@ -116,7 +117,7 @@ describe('useChartManagement initialization', () => {
     const indicatorChartsRef = { current: new Map() }
 
     renderHook(() =>
-      useChartManagement('candlestick', 'BTC-USD', indicatorChartsRef as any)
+      useChartManagement('candlestick', 'BTC-USD', indicatorChartsRef as unknown as MutableRefObject<Map<string, IChartApi>>)
     )
 
     // chartContainerRef.current is null by default (no DOM element attached)
@@ -129,14 +130,14 @@ describe('useChartManagement syncAllChartsToRange', () => {
   test('syncs indicator charts when called from main chart', () => {
     const mockIndicatorChart = createMockChart()
     const indicatorChartsRef = {
-      current: new Map([['rsi-123', mockIndicatorChart as any]]),
+      current: new Map([['rsi-123', mockIndicatorChart as unknown as IChartApi]]),
     }
 
     const { result } = renderHook(() =>
-      useChartManagement('candlestick', 'BTC-USD', indicatorChartsRef as any)
+      useChartManagement('candlestick', 'BTC-USD', indicatorChartsRef as unknown as MutableRefObject<Map<string, IChartApi>>)
     )
 
-    const timeRange = { from: 1700000000 as any, to: 1700100000 as any }
+    const timeRange = { from: 1700000000 as Time, to: 1700100000 as Time }
 
     act(() => {
       result.current.syncAllChartsToRange('main', timeRange)
@@ -148,11 +149,11 @@ describe('useChartManagement syncAllChartsToRange', () => {
   test('does not sync when timeRange is null', () => {
     const mockIndicatorChart = createMockChart()
     const indicatorChartsRef = {
-      current: new Map([['rsi-123', mockIndicatorChart as any]]),
+      current: new Map([['rsi-123', mockIndicatorChart as unknown as IChartApi]]),
     }
 
     const { result } = renderHook(() =>
-      useChartManagement('candlestick', 'BTC-USD', indicatorChartsRef as any)
+      useChartManagement('candlestick', 'BTC-USD', indicatorChartsRef as unknown as MutableRefObject<Map<string, IChartApi>>)
     )
 
     act(() => {
@@ -165,14 +166,14 @@ describe('useChartManagement syncAllChartsToRange', () => {
   test('does not sync the source chart to itself', () => {
     const mockIndicatorChart = createMockChart()
     const indicatorChartsRef = {
-      current: new Map([['rsi-123', mockIndicatorChart as any]]),
+      current: new Map([['rsi-123', mockIndicatorChart as unknown as IChartApi]]),
     }
 
     const { result } = renderHook(() =>
-      useChartManagement('candlestick', 'BTC-USD', indicatorChartsRef as any)
+      useChartManagement('candlestick', 'BTC-USD', indicatorChartsRef as unknown as MutableRefObject<Map<string, IChartApi>>)
     )
 
-    const timeRange = { from: 1700000000 as any, to: 1700100000 as any }
+    const timeRange = { from: 1700000000 as Time, to: 1700100000 as Time }
 
     act(() => {
       result.current.syncAllChartsToRange('rsi-123', timeRange)
@@ -186,14 +187,14 @@ describe('useChartManagement syncAllChartsToRange', () => {
     const indicatorChartsRef = { current: new Map() }
 
     const { result } = renderHook(() =>
-      useChartManagement('candlestick', 'BTC-USD', indicatorChartsRef as any)
+      useChartManagement('candlestick', 'BTC-USD', indicatorChartsRef as unknown as MutableRefObject<Map<string, IChartApi>>)
     )
 
     // Manually assign a mock chart to chartRef to simulate initialization
     const mockMainChart = createMockChart()
-    ;(result.current.chartRef as any).current = mockMainChart
+    ;(result.current.chartRef as MutableRefObject<IChartApi | null>).current = mockMainChart
 
-    const timeRange = { from: 1700000000 as any, to: 1700100000 as any }
+    const timeRange = { from: 1700000000 as Time, to: 1700100000 as Time }
 
     act(() => {
       result.current.syncAllChartsToRange('rsi-123', timeRange)
@@ -209,14 +210,14 @@ describe('useChartManagement syncAllChartsToRange', () => {
     })
 
     const indicatorChartsRef = {
-      current: new Map([['rsi-123', mockIndicatorChart as any]]),
+      current: new Map([['rsi-123', mockIndicatorChart as unknown as IChartApi]]),
     }
 
     const { result } = renderHook(() =>
-      useChartManagement('candlestick', 'BTC-USD', indicatorChartsRef as any)
+      useChartManagement('candlestick', 'BTC-USD', indicatorChartsRef as unknown as MutableRefObject<Map<string, IChartApi>>)
     )
 
-    const timeRange = { from: 1700000000 as any, to: 1700100000 as any }
+    const timeRange = { from: 1700000000 as Time, to: 1700100000 as Time }
 
     // Should not throw
     act(() => {
@@ -230,7 +231,7 @@ describe('useChartManagement refs initial state', () => {
     const indicatorChartsRef = { current: new Map() }
 
     const { result } = renderHook(() =>
-      useChartManagement('candlestick', 'BTC-USD', indicatorChartsRef as any)
+      useChartManagement('candlestick', 'BTC-USD', indicatorChartsRef as unknown as MutableRefObject<Map<string, IChartApi>>)
     )
 
     // Since container ref is null, chart is not created
@@ -241,7 +242,7 @@ describe('useChartManagement refs initial state', () => {
     const indicatorChartsRef = { current: new Map() }
 
     const { result } = renderHook(() =>
-      useChartManagement('candlestick', 'BTC-USD', indicatorChartsRef as any)
+      useChartManagement('candlestick', 'BTC-USD', indicatorChartsRef as unknown as MutableRefObject<Map<string, IChartApi>>)
     )
 
     expect(result.current.mainSeriesRef.current).toBeNull()
@@ -251,7 +252,7 @@ describe('useChartManagement refs initial state', () => {
     const indicatorChartsRef = { current: new Map() }
 
     const { result } = renderHook(() =>
-      useChartManagement('candlestick', 'BTC-USD', indicatorChartsRef as any)
+      useChartManagement('candlestick', 'BTC-USD', indicatorChartsRef as unknown as MutableRefObject<Map<string, IChartApi>>)
     )
 
     expect(result.current.volumeSeriesRef.current).toBeNull()
@@ -261,7 +262,7 @@ describe('useChartManagement refs initial state', () => {
     const indicatorChartsRef = { current: new Map() }
 
     const { result } = renderHook(() =>
-      useChartManagement('candlestick', 'BTC-USD', indicatorChartsRef as any)
+      useChartManagement('candlestick', 'BTC-USD', indicatorChartsRef as unknown as MutableRefObject<Map<string, IChartApi>>)
     )
 
     expect(result.current.isCleanedUpRef.current).toBe(false)
@@ -271,7 +272,7 @@ describe('useChartManagement refs initial state', () => {
     const indicatorChartsRef = { current: new Map() }
 
     const { result } = renderHook(() =>
-      useChartManagement('candlestick', 'BTC-USD', indicatorChartsRef as any)
+      useChartManagement('candlestick', 'BTC-USD', indicatorChartsRef as unknown as MutableRefObject<Map<string, IChartApi>>)
     )
 
     expect(result.current.syncCallbacksRef.current.size).toBe(0)
@@ -287,16 +288,16 @@ describe('useChartManagement sync reentrancy guard', () => {
     // callback that calls syncAllChartsToRange again. The guard should prevent this.
     const indicatorChartsRef = {
       current: new Map([
-        ['ind-1', mockChart1 as any],
-        ['ind-2', mockChart2 as any],
+        ['ind-1', mockChart1 as unknown as IChartApi],
+        ['ind-2', mockChart2 as unknown as IChartApi],
       ]),
     }
 
     const { result } = renderHook(() =>
-      useChartManagement('candlestick', 'BTC-USD', indicatorChartsRef as any)
+      useChartManagement('candlestick', 'BTC-USD', indicatorChartsRef as unknown as MutableRefObject<Map<string, IChartApi>>)
     )
 
-    const timeRange = { from: 1700000000 as any, to: 1700100000 as any }
+    const timeRange = { from: 1700000000 as Time, to: 1700100000 as Time }
 
     act(() => {
       result.current.syncAllChartsToRange('main', timeRange)
@@ -331,7 +332,7 @@ describe('useChartManagement async chart creation (lazy lightweight-charts)', ()
     const states: boolean[] = []
     let latest: ReturnType<typeof useChartManagement> | null = null
     function Harness() {
-      const api = useChartManagement('candlestick', 'BTC-USD', { current: new Map() } as any)
+      const api = useChartManagement('candlestick', 'BTC-USD', { current: new Map() } as unknown as MutableRefObject<Map<string, IChartApi>>)
       states.push(api.chartReady)
       latest = api
       return createElement('div', { ref: api.chartContainerRef })

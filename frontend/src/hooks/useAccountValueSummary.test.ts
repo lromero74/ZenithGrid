@@ -4,6 +4,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import React from 'react'
 
 import { useAccountValueSummary } from './useAccountValueSummary'
+import type { AccountValueSummary } from '../services/api'
 
 vi.mock('../services/api', () => ({
   accountValueSummaryApi: {
@@ -34,7 +35,7 @@ describe('useAccountValueSummary', () => {
       as_of: '2026-04-21T00:00:00',
       is_stale: true,
       is_refreshing: false,
-    } as any)
+    })
   })
 
   afterEach(() => {
@@ -43,7 +44,7 @@ describe('useAccountValueSummary', () => {
 
   test('fetches account-specific summary when account is selected', async () => {
     const { result } = renderHook(
-      () => useAccountValueSummary({ selectedAccount: { id: 7 } as any }),
+      () => useAccountValueSummary({ selectedAccount: { id: 7 } }),
       { wrapper: createWrapper() },
     )
 
@@ -80,7 +81,7 @@ describe('useAccountValueSummary', () => {
         as_of: '2026-04-21T00:00:00',
         is_stale: true,
         is_refreshing: true,
-      } as any)
+      })
       .mockResolvedValueOnce({
         account_id: 7,
         total_usd_value: 1100.0,
@@ -89,10 +90,10 @@ describe('useAccountValueSummary', () => {
         as_of: '2026-04-21T00:00:05',
         is_stale: false,
         is_refreshing: false,
-      } as any)
+      })
 
     const { result } = renderHook(
-      () => useAccountValueSummary({ selectedAccount: { id: 7 } as any }),
+      () => useAccountValueSummary({ selectedAccount: { id: 7 } }),
       { wrapper: createWrapper() },
     )
 
@@ -108,7 +109,7 @@ describe('useAccountValueSummary', () => {
 
   test('keeps stale summary visible while quick refresh is in flight', async () => {
     vi.useRealTimers()
-    let resolveFresh: ((value: any) => void) | undefined
+    let resolveFresh: ((value: AccountValueSummary) => void) | undefined
 
     vi.mocked(accountValueSummaryApi.get)
       .mockResolvedValueOnce({
@@ -119,16 +120,16 @@ describe('useAccountValueSummary', () => {
         as_of: '2026-04-21T00:00:00',
         is_stale: true,
         is_refreshing: true,
-      } as any)
+      })
       .mockImplementationOnce(
         () =>
           new Promise((resolve) => {
             resolveFresh = resolve
-          }) as Promise<any>,
+          }) as Promise<AccountValueSummary>,
       )
 
     const { result } = renderHook(
-      () => useAccountValueSummary({ selectedAccount: { id: 7 } as any }),
+      () => useAccountValueSummary({ selectedAccount: { id: 7 } }),
       { wrapper: createWrapper() },
     )
 

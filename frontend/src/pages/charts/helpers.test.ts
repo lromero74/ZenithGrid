@@ -14,6 +14,7 @@ import {
   filterIndicators,
   groupIndicatorsByCategory,
 } from './helpers'
+import type { CandleData } from '../../utils/indicators/types'
 import { AVAILABLE_INDICATORS } from '../../utils/indicators'
 
 describe('getPriceFormat', () => {
@@ -64,7 +65,7 @@ describe('transformPriceData', () => {
   const candles = [
     { time: 1000, open: 100, high: 110, low: 90, close: 105, volume: 500 },
     { time: 2000, open: 105, high: 115, low: 95, close: 110, volume: 600 },
-  ] as any[]
+  ] as CandleData[]
 
   test('transforms for candlestick chart', () => {
     const data = transformPriceData(candles, 'candlestick')
@@ -109,7 +110,7 @@ describe('transformVolumeData', () => {
   test('assigns green for up candles', () => {
     const candles = [
       { time: 1000, open: 100, high: 110, low: 90, close: 105, volume: 500 },
-    ] as any[]
+    ] as CandleData[]
     const data = transformVolumeData(candles)
     expect(data[0].value).toBe(500)
     expect(data[0].color).toBe('#10b98180') // green (close >= open)
@@ -118,7 +119,7 @@ describe('transformVolumeData', () => {
   test('assigns red for down candles', () => {
     const candles = [
       { time: 1000, open: 110, high: 115, low: 95, close: 100, volume: 400 },
-    ] as any[]
+    ] as CandleData[]
     const data = transformVolumeData(candles)
     expect(data[0].color).toBe('#ef444480') // red (close < open)
   })
@@ -126,7 +127,7 @@ describe('transformVolumeData', () => {
   test('assigns green for doji (close == open)', () => {
     const candles = [
       { time: 1000, open: 100, high: 105, low: 95, close: 100, volume: 300 },
-    ] as any[]
+    ] as CandleData[]
     const data = transformVolumeData(candles)
     expect(data[0].color).toBe('#10b98180') // green (close >= open)
   })
@@ -141,7 +142,7 @@ describe('extractCandleValues', () => {
     const candles = [
       { time: 1, open: 1, high: 3, low: 0.5, close: 2, volume: 100 },
       { time: 2, open: 2, high: 4, low: 1, close: 3, volume: 200 },
-    ] as any[]
+    ] as CandleData[]
     const { closes, highs, lows } = extractCandleValues(candles)
     expect(closes).toEqual([2, 3])
     expect(highs).toEqual([3, 4])

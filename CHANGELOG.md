@@ -5,6 +5,11 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v3.14.5] - 2026-06-27
+
+### Changed
+- **Frontend type-safety cleanup complete (no behavior change).** This release types the last of the web app's test-suite mocks, finishing the campaign that removed every loose `any` type from the frontend codebase — all 352 original `any` warnings are now gone across application code and tests. The build now catches a whole class of type-mismatch bugs that previously slipped through, with no change to runtime behavior (verified by the full 2,792-test suite).
+
 ## [v3.14.4] - 2026-06-27
 
 ### Changed

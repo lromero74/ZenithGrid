@@ -43,7 +43,7 @@ describe('usePositionTrades trades query', () => {
       { id: 1, position_id: 5, side: 'buy', price: 100, base_amount: 0.5, quote_amount: 50, timestamp: '2025-01-01', trade_type: 'buy', order_id: 'o1' },
       { id: 2, position_id: 5, side: 'sell', price: 110, base_amount: 0.5, quote_amount: 55, timestamp: '2025-01-02', trade_type: 'sell', order_id: 'o2' },
     ]
-    vi.mocked(positionsApi.getTrades).mockResolvedValue(mockTrades as any)
+    vi.mocked(positionsApi.getTrades).mockResolvedValue(mockTrades as unknown as Awaited<ReturnType<typeof positionsApi.getTrades>>)
 
     const { result } = renderHook(
       () => usePositionTrades({
@@ -82,7 +82,7 @@ describe('usePositionTrades tradeHistory query', () => {
     const mockHistory = [
       { id: 10, position_id: 8, side: 'buy', price: 200, base_amount: 1, quote_amount: 200, timestamp: '2025-01-01', trade_type: 'buy', order_id: 'o10' },
     ]
-    vi.mocked(positionsApi.getTrades).mockResolvedValue(mockHistory as any)
+    vi.mocked(positionsApi.getTrades).mockResolvedValue(mockHistory as unknown as Awaited<ReturnType<typeof positionsApi.getTrades>>)
 
     const { result } = renderHook(
       () => usePositionTrades({
@@ -129,7 +129,7 @@ describe('usePositionTrades tradeHistory query', () => {
   })
 
   test('isLoadingTradeHistory reflects loading state', async () => {
-    let resolveGetTrades: (value: any) => void
+    let resolveGetTrades: (value: Awaited<ReturnType<typeof positionsApi.getTrades>>) => void
     vi.mocked(positionsApi.getTrades).mockImplementation(
       () => new Promise(resolve => { resolveGetTrades = resolve })
     )
@@ -166,7 +166,7 @@ describe('usePositionTrades both queries', () => {
       if (id === 5) return Promise.resolve(tradesForExpanded)
       if (id === 10) return Promise.resolve(tradesForModal)
       return Promise.resolve([])
-    }) as any)
+    }) as unknown as typeof positionsApi.getTrades)
 
     const { result } = renderHook(
       () => usePositionTrades({

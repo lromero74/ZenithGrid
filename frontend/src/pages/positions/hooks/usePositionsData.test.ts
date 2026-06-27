@@ -8,6 +8,7 @@
  */
 
 import { describe, test, expect, vi, beforeEach, afterEach } from 'vitest'
+import type { Position } from '../../../types'
 import { renderHook, waitFor, act } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { createElement } from 'react'
@@ -98,7 +99,7 @@ describe('usePositionsData', () => {
         total_quote_received: null, profit_quote: null,
         profit_percentage: null, trade_count: 1,
       },
-    ] as any)
+    ] as unknown as Awaited<ReturnType<typeof positionsApi.getAll>>)
 
     const qc = new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: 0 } } })
     const { result } = renderHook(
@@ -125,7 +126,7 @@ describe('usePositionsData', () => {
   })
 
   test('fetches direct BTC/USD market price instead of account portfolio', async () => {
-    vi.mocked(marketDataApi.getPrice).mockResolvedValue({ price: 98765.43 } as any)
+    vi.mocked(marketDataApi.getPrice).mockResolvedValue({ price: 98765.43 } as unknown as Awaited<ReturnType<typeof marketDataApi.getPrice>>)
 
     const qc = new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: 0 } } })
     const { result } = renderHook(
@@ -171,7 +172,7 @@ describe('usePositionsData', () => {
     renderHook(() => usePositionsData({}), { wrapper: makeWrapper(qc) })
 
     const positionsQuery = qc.getQueryCache().find({ queryKey: ['positions', 'open', undefined] })
-    const observerOptions = positionsQuery?.observers[0]?.options as any
+    const observerOptions = positionsQuery?.observers[0]?.options as { refetchInterval?: unknown }
 
     expect(typeof observerOptions.refetchInterval).toBe('function')
     expect(observerOptions.refetchInterval(positionsQuery)).toBe(30000)
@@ -188,7 +189,7 @@ describe('usePositionsData', () => {
         total_quote_received: null, profit_quote: null,
         profit_percentage: null, trade_count: 1,
       },
-    ] as any)
+    ] as unknown as Awaited<ReturnType<typeof positionsApi.getAll>>)
 
     const qc = new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: 0 } } })
     renderHook(() => usePositionsData({}), { wrapper: makeWrapper(qc) })
@@ -198,7 +199,7 @@ describe('usePositionsData', () => {
     })
 
     const positionsQuery = qc.getQueryCache().find({ queryKey: ['positions', 'open', undefined] })
-    const observerOptions = positionsQuery?.observers[0]?.options as any
+    const observerOptions = positionsQuery?.observers[0]?.options as { refetchInterval?: unknown }
 
     expect(observerOptions.refetchInterval(positionsQuery)).toBe(10000)
   })
@@ -208,7 +209,7 @@ describe('usePositionsData', () => {
     renderHook(() => usePositionsData({}), { wrapper: makeWrapper(qc) })
 
     const botsQuery = qc.getQueryCache().find({ queryKey: ['bots', undefined] })
-    const observerOptions = botsQuery?.observers[0]?.options as any
+    const observerOptions = botsQuery?.observers[0]?.options as { refetchInterval?: unknown }
 
     expect(observerOptions.refetchInterval).toBeUndefined()
     expect(observerOptions.staleTime).toBe(300000)
@@ -244,7 +245,7 @@ describe('usePositionsData', () => {
         total_quote_received: null, profit_quote: null,
         profit_percentage: null, trade_count: 1,
       },
-    ] as any)
+    ] as unknown as Awaited<ReturnType<typeof positionsApi.getAll>>)
 
     const qc = new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: 0 } } })
     renderHook(
@@ -276,7 +277,7 @@ describe('usePositionsData', () => {
         total_quote_received: null, profit_quote: null,
         profit_percentage: null, trade_count: 1,
       },
-    ] as any
+    ] as unknown as Position[]
 
     const visibilityState: DocumentVisibilityState = 'hidden'
     Object.defineProperty(document, 'visibilityState', {
@@ -315,13 +316,13 @@ describe('usePositionsData', () => {
     // These are the ones most impactful when running in background.
     const highFrequencyObserverOptions = queries.flatMap(q =>
       q.observers
-        .map((obs: any) => obs.options)
-        .filter((opts: any) => typeof opts?.refetchInterval === 'number' && opts.refetchInterval <= 30_000)
+        .map((obs: { options: { refetchInterval?: unknown } }) => obs.options)
+        .filter((opts: { refetchInterval?: unknown }) => typeof opts?.refetchInterval === 'number' && opts.refetchInterval <= 30_000)
     )
 
     expect(highFrequencyObserverOptions.length).toBeGreaterThan(0)
 
-    highFrequencyObserverOptions.forEach((opts: any) => {
+    highFrequencyObserverOptions.forEach((opts: { refetchInterval?: unknown }) => {
       expect(
         opts.refetchIntervalInBackground,
         `Query with refetchInterval=${opts.refetchInterval}ms should have refetchIntervalInBackground: false`

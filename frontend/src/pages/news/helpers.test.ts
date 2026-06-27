@@ -29,6 +29,7 @@ import {
   unhighlightArticle,
   scrollToArticle,
 } from './helpers'
+import type { NewsItem, VideoItem } from '../../types/newsTypes'
 
 // Minimal news item
 const news = (
@@ -39,10 +40,10 @@ const news = (
   ({
     source, category, is_seen: opts?.is_seen, has_issue: opts?.has_issue,
     content_scrape_allowed: opts?.content_scrape_allowed,
-  }) as any
+  }) as unknown as NewsItem
 
 const video = (source: string, category: string) =>
-  ({ source, category }) as any
+  ({ source, category }) as unknown as VideoItem
 
 describe('filterNewsBySource', () => {
   test('returns all when sources set is empty', () => {
@@ -54,7 +55,7 @@ describe('filterNewsBySource', () => {
     const items = [news('a', 'crypto'), news('b', 'tech'), news('a', 'markets')]
     const result = filterNewsBySource(items, new Set(['a']))
     expect(result).toHaveLength(2)
-    expect(result.every((i: any) => i.source === 'a')).toBe(true)
+    expect(result.every((i: NewsItem) => i.source === 'a')).toBe(true)
   })
 
   test('returns empty when no sources match', () => {

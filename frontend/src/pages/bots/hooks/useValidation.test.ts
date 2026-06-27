@@ -47,8 +47,8 @@ function createFormData(overrides: Partial<BotFormData> = {}): BotFormData {
 // ---------- Suite ----------
 
 describe('useValidation', () => {
-  let setValidationWarnings: any
-  let setValidationErrors: any
+  let setValidationWarnings: ReturnType<typeof vi.fn>
+  let setValidationErrors: ReturnType<typeof vi.fn>
 
   beforeEach(() => {
     vi.restoreAllMocks()
