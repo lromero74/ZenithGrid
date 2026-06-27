@@ -5,6 +5,11 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v3.13.28] - 2026-06-27
+
+### Changed
+- **Frontend API client typing is stricter.** Removed the remaining explicit `any` warnings from the report/API client lint target so future report-provider changes stay warning-clean.
+
 ## [v3.13.27] - 2026-06-27
 
 ### Added

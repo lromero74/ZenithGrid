@@ -430,9 +430,59 @@ export const accountApi = {
 
 export const statusApi = {
   get: () =>
-    api.get<{ api_connected: boolean; monitor: any; timestamp: string }>('/status')
+    api.get<{ api_connected: boolean; monitor: unknown; timestamp: string }>('/status')
       .then((res) => res.data),
 };
+
+export interface BotLogEntry {
+  id: number;
+  timestamp: string;
+  log_type?: string;
+  product_id?: string | null;
+  current_price: number | null;
+  decision?: string | null;
+  confidence?: number | null;
+  phase?: string | null;
+  conditions_met?: boolean | null;
+  position_status?: string | null;
+  [key: string]: unknown;
+}
+
+export interface ScannerLogEntry extends BotLogEntry {
+  scan_type: string;
+  decision: string;
+}
+
+export interface IndicatorConditionDetail {
+  type: string;
+  timeframe?: string;
+  operator?: string;
+  threshold?: number;
+  actual_value: number | null;
+  result: boolean;
+  negated?: boolean;
+  error?: string;
+  reason?: string;
+  previous_value?: number;
+  indicator?: string;
+}
+
+export interface IndicatorLogEntry extends BotLogEntry {
+  bot_id: number;
+  product_id: string;
+  phase: string;
+  conditions_met: boolean;
+  conditions_detail: IndicatorConditionDetail[];
+  indicators_snapshot: Record<string, unknown> | null;
+}
+
+export interface BotTemplate {
+  id?: number;
+  name?: string;
+  strategy_type?: string;
+  config?: Record<string, unknown>;
+  [key: string]: unknown;
+}
 
 export const botsApi = {
   getStrategies: () =>
@@ -473,7 +523,7 @@ export const botsApi = {
     });
     if (productId) params.append('product_id', productId);
     if (since) params.append('since', since);
-    return api.get<any[]>(`/bots/${id}/logs?${params}`).then((res) => res.data);
+    return api.get<BotLogEntry[]>(`/bots/${id}/logs?${params}`).then((res) => res.data);
   },
   getDecisionLogs: (id: number, limit = 50, offset = 0, productId?: string, since?: string) => {
     const params = new URLSearchParams({
@@ -482,7 +532,7 @@ export const botsApi = {
     });
     if (productId) params.append('product_id', productId);
     if (since) params.append('since', since);
-    return api.get<any[]>(`/bots/${id}/decision-logs?${params}`).then((res) => res.data);
+    return api.get<BotLogEntry[]>(`/bots/${id}/decision-logs?${params}`).then((res) => res.data);
   },
   getScannerLogs: (id: number, limit = 100, offset = 0, productId?: string, scanType?: string, decision?: string, since?: string) => {
     const params = new URLSearchParams({
@@ -493,7 +543,7 @@ export const botsApi = {
     if (scanType) params.append('scan_type', scanType);
     if (decision) params.append('decision', decision);
     if (since) params.append('since', since);
-    return api.get<any[]>(`/bots/${id}/scanner-logs?${params}`).then((res) => res.data);
+    return api.get<ScannerLogEntry[]>(`/bots/${id}/scanner-logs?${params}`).then((res) => res.data);
   },
   getIndicatorLogs: (id: number, limit = 50, offset = 0, productId?: string, phase?: string, conditionsMet?: boolean, since?: string) => {
     const params = new URLSearchParams({
@@ -504,7 +554,7 @@ export const botsApi = {
     if (phase) params.append('phase', phase);
     if (conditionsMet !== undefined) params.append('conditions_met', conditionsMet.toString());
     if (since) params.append('since', since);
-    return api.get<any[]>(`/bots/${id}/indicator-logs?${params}`).then((res) => res.data);
+    return api.get<IndicatorLogEntry[]>(`/bots/${id}/indicator-logs?${params}`).then((res) => res.data);
   },
   // Cancel all positions for a bot
   cancelAllPositions: (id: number, confirm = true) =>
@@ -524,13 +574,13 @@ export const botsApi = {
 
 export const templatesApi = {
   getAll: () =>
-    api.get<any[]>('/templates').then((res) => res.data),
+    api.get<BotTemplate[]>('/templates').then((res) => res.data),
   getById: (id: number) =>
-    api.get<any>(`/templates/${id}`).then((res) => res.data),
-  create: (template: any) =>
-    api.post<any>('/templates', template).then((res) => res.data),
-  update: (id: number, template: Partial<any>) =>
-    api.put<any>(`/templates/${id}`, template).then((res) => res.data),
+    api.get<BotTemplate>(`/templates/${id}`).then((res) => res.data),
+  create: (template: BotTemplate) =>
+    api.post<BotTemplate>('/templates', template).then((res) => res.data),
+  update: (id: number, template: Partial<BotTemplate>) =>
+    api.put<BotTemplate>(`/templates/${id}`, template).then((res) => res.data),
   delete: (id: number) =>
     api.delete<{ message: string }>(`/templates/${id}`).then((res) => res.data),
   seedDefaults: () =>
@@ -547,26 +597,26 @@ export interface PaginatedResponse<T> {
 
 export const orderHistoryApi = {
   getAll: (botId?: number, accountId?: number, status?: string, limit = 100, offset = 0) => {
-    const params: any = { limit, offset };
+    const params: Record<string, string | number> = { limit, offset };
     if (botId !== undefined) params.bot_id = botId;
     if (accountId !== undefined) params.account_id = accountId;
     if (status) params.status = status;
     return api.get<OrderHistory[]>('/order-history/', { params }).then((res) => res.data);
   },
   getFailed: (botId?: number, accountId?: number, limit = 50) => {
-    const params: any = { limit };
+    const params: Record<string, number> = { limit };
     if (botId !== undefined) params.bot_id = botId;
     if (accountId !== undefined) params.account_id = accountId;
     return api.get<OrderHistory[]>('/order-history/failed', { params }).then((res) => res.data);
   },
   getFailedPaginated: (page = 1, pageSize = 25, botId?: number, accountId?: number) => {
-    const params: any = { page, page_size: pageSize };
+    const params: Record<string, number> = { page, page_size: pageSize };
     if (botId !== undefined) params.bot_id = botId;
     if (accountId !== undefined) params.account_id = accountId;
     return api.get<PaginatedResponse<OrderHistory>>('/order-history/failed/paginated', { params }).then((res) => res.data);
   },
   getStats: (botId?: number, accountId?: number) => {
-    const params: any = {};
+    const params: Record<string, number> = {};
     if (botId !== undefined) params.bot_id = botId;
     if (accountId !== undefined) params.account_id = accountId;
     return api.get<{
@@ -1050,12 +1100,25 @@ export interface TransferRecentSummary {
   transfers: TransferItem[]
 }
 
+export interface TransferCreatePayload {
+  account_id: number
+  transfer_type: string
+  amount: number
+  currency: string
+  amount_usd?: number
+  occurred_at: string
+}
+
+export interface TransferCreateResponse extends TransferItem {
+  id: number
+}
+
 export const transfersApi = {
   sync: () => api.post<{ status: string; new_transfers: number }>('/transfers/sync').then(r => r.data),
   list: (params?: { start?: string; end?: string; account_id?: number; limit?: number; offset?: number }) =>
-    api.get<{ total: number; transfers: any[] }>('/transfers', { params }).then(r => r.data),
-  create: (data: { account_id: number; transfer_type: string; amount: number; currency: string; amount_usd?: number; occurred_at: string }) =>
-    api.post<any>('/transfers', data).then(r => r.data),
+    api.get<{ total: number; transfers: TransferItem[] }>('/transfers', { params }).then(r => r.data),
+  create: (data: TransferCreatePayload) =>
+    api.post<TransferCreateResponse>('/transfers', data).then(r => r.data),
   delete: (id: number) => api.delete<{ detail: string }>(`/transfers/${id}`).then(r => r.data),
   getSummary: (params?: { start?: string; end?: string; account_id?: number }) =>
     api.get<{ net_deposits_usd: number; total_deposits_usd: number; total_withdrawals_usd: number; deposit_count: number; withdrawal_count: number }>('/transfers/summary', { params }).then(r => r.data),

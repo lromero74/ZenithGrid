@@ -8,6 +8,34 @@
 
 import { describe, test, expect, beforeEach, vi, afterEach } from 'vitest'
 
+interface MockRequestConfig {
+  headers: Record<string, string>
+  url?: string
+  _retry?: boolean
+}
+
+interface MockResponse<T = unknown> {
+  data?: T
+  status?: number
+}
+
+interface MockInterceptor<TInput, TOutput = TInput> {
+  fulfilled: (value: TInput) => TOutput
+  rejected: (error: unknown) => Promise<unknown>
+}
+
+type RequestInterceptor = MockInterceptor<MockRequestConfig>
+type ResponseInterceptor = MockInterceptor<MockResponse, MockResponse>
+
+interface TestApiInternals {
+  _requestInterceptors: RequestInterceptor[]
+  _responseInterceptors: ResponseInterceptor[]
+}
+
+type MockFetch = typeof globalThis.fetch & {
+  mock: { calls: Array<Parameters<typeof globalThis.fetch>> }
+}
+
 const storageState = new Map<string, string>()
 
 const localStorageMock = {
@@ -30,8 +58,8 @@ Object.defineProperty(globalThis, 'localStorage', {
 
 // Mock axios before importing the module under test
 vi.mock('axios', () => {
-  const requestInterceptors: Array<{ fulfilled: (config: any) => any; rejected: (error: any) => any }> = []
-  const responseInterceptors: Array<{ fulfilled: (response: any) => any; rejected: (error: any) => any }> = []
+  const requestInterceptors: RequestInterceptor[] = []
+  const responseInterceptors: ResponseInterceptor[] = []
 
   const mockAxiosInstance = {
     get: vi.fn(),
@@ -41,13 +69,13 @@ vi.mock('axios', () => {
     delete: vi.fn(),
     interceptors: {
       request: {
-        use: vi.fn((fulfilled: any, rejected: any) => {
+        use: vi.fn((fulfilled: RequestInterceptor['fulfilled'], rejected: RequestInterceptor['rejected']) => {
           requestInterceptors.push({ fulfilled, rejected })
           return requestInterceptors.length - 1
         }),
       },
       response: {
-        use: vi.fn((fulfilled: any, rejected: any) => {
+        use: vi.fn((fulfilled: ResponseInterceptor['fulfilled'], rejected: ResponseInterceptor['rejected']) => {
           responseInterceptors.push({ fulfilled, rejected })
           return responseInterceptors.length - 1
         }),
@@ -89,6 +117,8 @@ import {
   transfersApi,
 } from './api'
 
+const apiInternals = () => api as typeof api & TestApiInternals
+
 describe('api axios instance', () => {
   beforeEach(() => {
     localStorage.clear()
@@ -108,7 +138,7 @@ describe('api axios instance', () => {
   })
 
   test('request interceptor attaches auth token from localStorage', () => {
-    const interceptors = (api as any)._requestInterceptors
+    const interceptors = apiInternals()._requestInterceptors
     expect(interceptors.length).toBeGreaterThan(0)
 
     const requestInterceptor = interceptors[0].fulfilled
@@ -121,7 +151,7 @@ describe('api axios instance', () => {
   })
 
   test('request interceptor does not set auth header when no token', () => {
-    const interceptors = (api as any)._requestInterceptors
+    const interceptors = apiInternals()._requestInterceptors
     const requestInterceptor = interceptors[0].fulfilled
 
     localStorage.removeItem('auth_access_token')
@@ -131,7 +161,7 @@ describe('api axios instance', () => {
   })
 
   test('request interceptor error handler rejects', async () => {
-    const interceptors = (api as any)._requestInterceptors
+    const interceptors = apiInternals()._requestInterceptors
     const errorHandler = interceptors[0].rejected
 
     const error = new Error('request error')
@@ -139,7 +169,7 @@ describe('api axios instance', () => {
   })
 
   test('response interceptor passes through successful responses', () => {
-    const interceptors = (api as any)._responseInterceptors
+    const interceptors = apiInternals()._responseInterceptors
     const successHandler = interceptors[0].fulfilled
 
     const response = { data: { message: 'ok' }, status: 200 }
@@ -158,7 +188,7 @@ describe('response interceptor 401 handling', () => {
   })
 
   test('non-401 errors are rejected without refresh attempt', async () => {
-    const interceptors = (api as any)._responseInterceptors
+    const interceptors = apiInternals()._responseInterceptors
     const errorHandler = interceptors[0].rejected
 
     const error = {
@@ -170,7 +200,7 @@ describe('response interceptor 401 handling', () => {
   })
 
   test('401 on refresh endpoint is rejected without retry', async () => {
-    const interceptors = (api as any)._responseInterceptors
+    const interceptors = apiInternals()._responseInterceptors
     const errorHandler = interceptors[0].rejected
 
     const error = {
@@ -182,7 +212,7 @@ describe('response interceptor 401 handling', () => {
   })
 
   test('401 with _retry already set is rejected without retry', async () => {
-    const interceptors = (api as any)._responseInterceptors
+    const interceptors = apiInternals()._responseInterceptors
     const errorHandler = interceptors[0].rejected
 
     const error = {
@@ -194,7 +224,7 @@ describe('response interceptor 401 handling', () => {
   })
 
   test('401 triggers refresh and retries on success', async () => {
-    const interceptors = (api as any)._responseInterceptors
+    const interceptors = apiInternals()._responseInterceptors
     const errorHandler = interceptors[0].rejected
 
     localStorage.setItem('auth_refresh_token', 'valid-refresh')
@@ -212,7 +242,7 @@ describe('response interceptor 401 handling', () => {
     globalThis.fetch = mockFetch
 
     // Mock api() to return retried response
-    ;(api as any).__proto__ = undefined  // Ensure api is callable
+    Object.setPrototypeOf(api, null)  // Ensure api is callable
     // Since api is a mock, we need to mock it as a function too
     const originalConfig = { _retry: false, url: '/api/bots/', headers: {} as Record<string, string> }
     const error = {
@@ -241,7 +271,7 @@ describe('response interceptor 401 handling', () => {
   })
 
   test('401 refresh failure triggers forceLogout', async () => {
-    const interceptors = (api as any)._responseInterceptors
+    const interceptors = apiInternals()._responseInterceptors
     const errorHandler = interceptors[0].rejected
 
     localStorage.setItem('auth_access_token', 'old-token')
@@ -280,7 +310,7 @@ describe('response interceptor 401 handling', () => {
   })
 
   test('401 with no refresh token triggers forceLogout', async () => {
-    const interceptors = (api as any)._responseInterceptors
+    const interceptors = apiInternals()._responseInterceptors
     const errorHandler = interceptors[0].rejected
 
     localStorage.setItem('auth_access_token', 'old-token')
@@ -344,7 +374,7 @@ describe('authFetch', () => {
     await authFetch('/api/test')
 
     // Headers should not contain Authorization
-    const callArgs = (globalThis.fetch as any).mock.calls[0]
+    const callArgs = (globalThis.fetch as MockFetch).mock.calls[0]
     expect(callArgs[1].headers.Authorization).toBeUndefined()
   })
 
@@ -740,7 +770,7 @@ describe('settingsApi', () => {
   test('update with object uses POST (legacy)', async () => {
     vi.mocked(api.post).mockResolvedValue({ data: { message: 'updated' } })
 
-    await settingsApi.update({ some_setting: 'value' } as any)
+    await settingsApi.update({ some_setting: 'value' } as Parameters<typeof settingsApi.update>[0])
     expect(api.post).toHaveBeenCalledWith('/settings', { some_setting: 'value' })
   })
 
@@ -893,14 +923,14 @@ describe('botsApi', () => {
     const botData = { name: 'Test Bot', strategy_id: 'grid' }
     vi.mocked(api.post).mockResolvedValue({ data: { id: 1, ...botData } })
 
-    await botsApi.create(botData as any)
+    await botsApi.create(botData as Parameters<typeof botsApi.create>[0])
     expect(api.post).toHaveBeenCalledWith('/bots/', botData)
   })
 
   test('update sends partial bot data', async () => {
     vi.mocked(api.put).mockResolvedValue({ data: { id: 1, name: 'Updated' } })
 
-    await botsApi.update(1, { name: 'Updated' } as any)
+    await botsApi.update(1, { name: 'Updated' } as Parameters<typeof botsApi.update>[1])
     expect(api.put).toHaveBeenCalledWith('/bots/1', { name: 'Updated' })
   })
 
@@ -1359,21 +1389,24 @@ describe('reportsApi', () => {
   test('createGoal sends data', async () => {
     vi.mocked(api.post).mockResolvedValue({ data: { id: 1 } })
 
-    await reportsApi.createGoal({ name: 'Goal 1' } as any)
+    await reportsApi.createGoal({ name: 'Goal 1' } as Parameters<typeof reportsApi.createGoal>[0])
     expect(api.post).toHaveBeenCalledWith('/reports/goals', { name: 'Goal 1' })
   })
 
   test('updateGoal sends PATCH-like data', async () => {
     vi.mocked(api.put).mockResolvedValue({ data: { id: 1, name: 'Updated' } })
 
-    await reportsApi.updateGoal(1, { name: 'Updated' } as any)
+    await reportsApi.updateGoal(1, { name: 'Updated' } as Parameters<typeof reportsApi.updateGoal>[1])
     expect(api.put).toHaveBeenCalledWith('/reports/goals/1', { name: 'Updated' })
   })
 
   test('updateGoal can send tracking start date reset', async () => {
     vi.mocked(api.put).mockResolvedValue({ data: { id: 1, start_date: '2026-06-26T00:00:00' } })
 
-    await reportsApi.updateGoal(1, { start_date: '2026-06-26T00:00:00' } as any)
+    await reportsApi.updateGoal(
+      1,
+      { start_date: '2026-06-26T00:00:00' } as Parameters<typeof reportsApi.updateGoal>[1],
+    )
     expect(api.put).toHaveBeenCalledWith('/reports/goals/1', { start_date: '2026-06-26T00:00:00' })
   })
 
@@ -1451,7 +1484,10 @@ describe('reportsApi', () => {
   test('createExpenseItem sends data', async () => {
     vi.mocked(api.post).mockResolvedValue({ data: { id: 1 } })
 
-    await reportsApi.createExpenseItem(3, { name: 'Rent', amount: 1000 } as any)
+    await reportsApi.createExpenseItem(
+      3,
+      { name: 'Rent', amount: 1000 } as Parameters<typeof reportsApi.createExpenseItem>[1],
+    )
     expect(api.post).toHaveBeenCalledWith('/reports/goals/3/expenses', { name: 'Rent', amount: 1000 })
   })
 

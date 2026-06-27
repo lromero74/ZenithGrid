@@ -805,6 +805,7 @@
     "base_url": "Configured via VITE_API_URL env var, defaults to same origin",
     "auth": "Authorization: Bearer {token} header via Axios interceptor",
     "file": "services/api.ts",
+    "notes": "v3.13.28 tightens API client/test typing for bot logs, templates, order-history params, and transfers so the report/API lint target runs with zero no-explicit-any warnings.",
     "modules": [
       {
         "name": "authFetch",
