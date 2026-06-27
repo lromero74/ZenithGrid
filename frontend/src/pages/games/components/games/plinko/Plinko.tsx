@@ -441,7 +441,7 @@ function PlinkoSinglePlayer({ onGameEnd }: {
         setBet(balanceRef.current)
       }
     }
-  }, [drawBoard, sfx])
+  }, [drawBoard, sfx, onGameEnd])
 
   const dropBall = useCallback(() => {
     if (betRef.current < MIN_BET || balanceRef.current < betRef.current) return

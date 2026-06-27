@@ -217,7 +217,7 @@ function GoFishSinglePlayer({ onGameEnd, onStateChange: _onStateChange, isMultip
       onGameEnd?.(tied ? 'draw' : humanWon ? 'win' : 'loss')
       clear()
     }
-  }, [gameState, clear, sfx])
+  }, [gameState, clear, sfx, onGameEnd])
 
   // Auto-run AI turn
   useEffect(() => {

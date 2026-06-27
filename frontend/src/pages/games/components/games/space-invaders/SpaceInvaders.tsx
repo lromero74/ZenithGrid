@@ -531,7 +531,7 @@ function SpaceInvadersSinglePlayer({ onGameEnd, onStateChange: _onStateChange, i
 
     draw()
     animFrameRef.current = requestAnimationFrame(tick)
-  }, [draw, saveScore, sfx])
+  }, [draw, saveScore, sfx, onGameEnd])
 
   // -----------------------------------------------------------------------
   // Start / restart

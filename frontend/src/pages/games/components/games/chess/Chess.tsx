@@ -364,7 +364,7 @@ function ChessSinglePlayer({ onGameEnd, onStateChange: _onStateChange }: { onGam
     }, 300)
 
     return () => clearTimeout(timer)
-  }, [isPlayerTurn, gameStatus, chessState, difficulty, checkGameEnd, sfx])
+  }, [isPlayerTurn, gameStatus, chessState, difficulty, checkGameEnd, sfx, onGameEnd])
 
   const handleNewGame = useCallback(() => {
     setChessState(createBoard())

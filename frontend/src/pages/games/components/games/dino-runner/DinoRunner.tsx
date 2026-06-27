@@ -762,7 +762,7 @@ function DinoRunnerSinglePlayer({ onGameEnd, onStateChange, isMultiplayer, input
     }
 
     rafRef.current = requestAnimationFrame(gameLoop)
-  }, [render, saveScore, music, sfx])
+  }, [render, saveScore, music, sfx, bestScore, onGameEnd])
 
   const restartGame = useCallback(() => {
     const hi = Math.max(bestScore, Math.floor(stateRef.current.highScore))

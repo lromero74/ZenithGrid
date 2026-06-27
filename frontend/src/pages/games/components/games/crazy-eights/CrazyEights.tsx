@@ -207,7 +207,7 @@ function CrazyEightsSinglePlayer({ onGameEnd, onStateChange: _onStateChange, isM
       onGameEnd?.(humanWon ? 'win' : 'loss')
       clear()
     }
-  }, [gameState, clear, sfx])
+  }, [gameState, clear, sfx, onGameEnd])
 
   const handlePlay = useCallback((cardIdx: number) => {
     music.init()

@@ -249,7 +249,7 @@ function CribbageSinglePlayer({ onGameEnd, onStateChange: _onStateChange, isMult
       onGameEnd?.(won ? 'win' : 'loss')
       clear()
     }
-  }, [gameState, clear])
+  }, [gameState, clear, onGameEnd])
 
   const handleToggleSelect = useCallback((idx: number) => {
     music.init()
