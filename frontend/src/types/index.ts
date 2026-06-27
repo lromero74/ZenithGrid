@@ -1,3 +1,10 @@
+// Minimal structural type for a React Query mutation passed to a child as a
+// prop. Components that only fire the mutation need just `.mutate`; the real
+// `UseMutationResult` object (with isPending, etc.) is assignable to this.
+export interface MutationLike<TVars = void> {
+  mutate: (variables: TVars) => void;
+}
+
 // Bot strategy configuration. Stored backend-side as an open JSON dict, so the
 // known fields are typed strictly while the index signature carries any extra
 // keys forms may set (as `unknown`, never `any`). The same shape is used for a
