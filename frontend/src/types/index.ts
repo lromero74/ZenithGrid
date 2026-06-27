@@ -14,24 +14,51 @@ export interface StrategyConfig {
   base_order_percentage?: number;
   base_order_value?: number;
   base_order_size?: number;
+  base_order_btc?: number;
+  base_order_type?: string;
+  auto_calculate_order_sizes?: boolean;
   dca_order_value?: number;
   safety_order_percentage?: number;
   safety_order_step_scale?: number;
+  safety_order_volume_scale?: number;
+  safety_order_size?: number;
+  safety_order_btc?: number;
+  safety_order_type?: string;
   price_deviation?: number;
   dca_target_reference?: string;
   initial_budget_percentage?: number;
   use_manual_sizing?: boolean;
   max_safety_orders?: number;
+  grace_safety_orders?: number;
+  min_daily_volume?: number;
   // profit / risk
   take_profit_percentage?: number;
+  take_profit_mode?: string;
+  take_profit_order_type?: string;
   min_profit_percentage?: number;
   default_tp_pct?: number;
   default_sl_pct?: number;
   trailing_take_profit?: boolean;
   trailing_tp_deviation?: number;
+  trailing_deviation?: number;
   stop_loss_enabled?: boolean;
   stop_loss_percentage?: number;
+  slippage_guard?: boolean;
+  max_buy_slippage_pct?: number;
+  max_sell_slippage_pct?: number;
   risk_tolerance?: string;
+  // execution
+  base_execution_type?: string;
+  dca_execution_type?: string;
+  // entry/exit conditions (open shapes: flat arrays or grouped expressions)
+  base_order_conditions?: unknown;
+  safety_order_conditions?: unknown;
+  take_profit_conditions?: unknown;
+  buy_conditions?: unknown;
+  sell_conditions?: unknown;
+  base_order_logic?: 'and' | 'or';
+  safety_order_logic?: 'and' | 'or';
+  take_profit_logic?: 'and' | 'or';
   // concurrency / cadence
   max_concurrent_deals?: number;
   max_concurrent_positions?: number;

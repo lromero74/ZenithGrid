@@ -1,5 +1,6 @@
 import { useState, useCallback, useRef, useEffect, useMemo } from 'react'
 import { botValidationApi } from '../../services/api'
+import type { StrategyConfig } from '../../types'
 import AdvancedConditionBuilder from './AdvancedConditionBuilder'
 import { EXCHANGE_MINIMUMS, calculateSoftCeiling } from '../bots'
 import {
@@ -11,8 +12,8 @@ import {
 } from './DCABudgetConfigForm.helpers'
 
 interface DCABudgetConfigFormProps {
-  config: Record<string, any>
-  onChange: (config: Record<string, any>) => void
+  config: StrategyConfig
+  onChange: (config: StrategyConfig) => void
   quoteCurrency?: string  // 'BTC', 'USD', 'USDC', etc. - defaults to 'BTC'
   aggregateBtcValue?: number  // Total BTC value for min percentage calculation
   aggregateUsdValue?: number  // Total USD value for min percentage calculation
@@ -417,7 +418,7 @@ function DCABudgetConfigForm({
               </label>
               <input
                 type="number"
-                value={config.base_order_percentage === '' || config.base_order_percentage == null ? '' : config.base_order_percentage}
+                value={(config.base_order_percentage as number | '') === '' || config.base_order_percentage == null ? '' : config.base_order_percentage}
                 onChange={(e) => {
                   if (e.target.value === '') { updateConfig('base_order_percentage', ''); return }
                   const v = safeParseFloat(e.target.value)
@@ -460,7 +461,7 @@ function DCABudgetConfigForm({
               </label>
               <input
                 type="number"
-                value={getBaseOrderSize() === '' || getBaseOrderSize() == null ? '' : getBaseOrderSize()}
+                value={(getBaseOrderSize() as number | '') === '' || getBaseOrderSize() == null ? '' : getBaseOrderSize()}
                 onChange={(e) => {
                   if (e.target.value === '') {
                     updateConfig(baseOrderKey, '')
@@ -630,7 +631,7 @@ function DCABudgetConfigForm({
               </label>
               <input
                 type="number"
-                value={config.safety_order_percentage === '' || config.safety_order_percentage == null ? '' : config.safety_order_percentage}
+                value={(config.safety_order_percentage as number | '') === '' || config.safety_order_percentage == null ? '' : config.safety_order_percentage}
                 onChange={(e) => {
                   if (e.target.value === '') { updateConfig('safety_order_percentage', ''); return }
                   const v = safeParseFloat(e.target.value)
@@ -673,7 +674,7 @@ function DCABudgetConfigForm({
               </label>
               <input
                 type="number"
-                value={getSafetyOrderSize() === '' || getSafetyOrderSize() == null ? '' : getSafetyOrderSize()}
+                value={(getSafetyOrderSize() as number | '') === '' || getSafetyOrderSize() == null ? '' : getSafetyOrderSize()}
                 onChange={(e) => {
                   if (e.target.value === '') { updateConfig(safetyOrderKey, ''); return }
                   const v = safeParseFloat(e.target.value)
@@ -905,7 +906,7 @@ function DCABudgetConfigForm({
         <>
           {(!config.take_profit_conditions ||
             (Array.isArray(config.take_profit_conditions) && config.take_profit_conditions.length === 0) ||
-            (config.take_profit_conditions?.groups && config.take_profit_conditions.groups.length === 0)) && (
+            (config.take_profit_conditions as { groups?: unknown[] })?.groups?.length === 0) && (
           <div className="bg-amber-900/30 border border-amber-700/50 rounded p-3 mb-4">
             <p className="text-xs text-amber-400">
               Minimum mode requires exit conditions. Without conditions, the bot will never sell via take profit.
