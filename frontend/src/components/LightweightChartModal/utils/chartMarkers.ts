@@ -1,4 +1,4 @@
-import { ISeriesApi } from 'lightweight-charts'
+import type { ISeriesApi, SeriesMarker, Time } from 'lightweight-charts'
 import type { Position } from '../../../types'
 import type { CandleData } from '../../../utils/indicators/types'
 
@@ -12,7 +12,7 @@ export function addMarkers(
 ): void {
   if (!position || chartData.length === 0) return
 
-  const markers: any[] = []
+  const markers: SeriesMarker<Time>[] = []
 
   // Entry marker
   if (position.opened_at) {
