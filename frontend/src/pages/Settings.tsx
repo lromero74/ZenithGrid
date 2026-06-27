@@ -1081,7 +1081,7 @@ export default function Settings() {
                 value={logRetentionDays}
                 onChange={(e) => setLogRetentionDays(parseInt(e.target.value) || 1)}
                 onBlur={() => {
-                  if (logRetentionDays === '' as any || isNaN(logRetentionDays)) {
+                  if (isNaN(logRetentionDays)) {
                     setLogRetentionDays(14)
                   }
                 }}

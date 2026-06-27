@@ -3,6 +3,7 @@ import { positionsApi, botsApi, api } from '../../../services/api'
 import { useState, useEffect, useMemo } from 'react'
 import { calculateUnrealizedPnL } from '../helpers'
 import { useMarketPrice } from '../../../hooks/useMarketPrice'
+import { isCanceledRequest } from '../../../utils/apiError'
 
 interface UsePositionsDataProps {
   selectedAccountId?: number | null
@@ -79,7 +80,7 @@ export const usePositionsData = ({ selectedAccountId }: UsePositionsDataProps) =
         })
         return response.data?.prices || {}
       } catch (err) {
-        if ((err as any)?.code === 'ERR_CANCELED' || (err as any)?.code === 'ECONNABORTED') {
+        if (isCanceledRequest(err)) {
           return {}
         }
         console.error('Error fetching batch prices:', err)

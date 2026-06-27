@@ -1,19 +1,21 @@
 import { X } from 'lucide-react'
+import type { ISeriesApi, SeriesType } from 'lightweight-charts'
+import type { IndicatorSettings } from '../../utils/indicators/types'
 
 export interface IndicatorConfig {
   id: string
   name: string
   type: string
   enabled: boolean
-  settings: Record<string, any>
+  settings: IndicatorSettings
   color?: string
-  series?: any[]
+  series?: ISeriesApi<SeriesType>[]
 }
 
 interface IndicatorSettingsModalProps {
   indicator: IndicatorConfig
   onClose: () => void
-  onUpdateSettings: (indicatorId: string, newSettings: Record<string, any>) => void
+  onUpdateSettings: (indicatorId: string, newSettings: IndicatorSettings) => void
 }
 
 export function IndicatorSettingsModal({
@@ -21,7 +23,7 @@ export function IndicatorSettingsModal({
   onClose,
   onUpdateSettings,
 }: IndicatorSettingsModalProps) {
-  const handleUpdate = (newSettings: Record<string, any>) => {
+  const handleUpdate = (newSettings: IndicatorSettings) => {
     onUpdateSettings(indicator.id, newSettings)
   }
 

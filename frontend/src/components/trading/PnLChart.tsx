@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, type ReactNode } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { createChart, ColorType, IChartApi, ISeriesApi, Time } from 'lightweight-charts'
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, Legend } from 'recharts'
@@ -57,7 +57,14 @@ interface PnLChartProps {
 }
 
 // Custom tooltip component
-const CustomTooltip = ({ active, payload, label, labelFormatter, currencyDisplay }: any) => {
+interface PnLTooltipProps {
+  active?: boolean
+  payload?: Array<{ payload: Record<string, number | undefined> }>
+  label?: string
+  labelFormatter?: (label: string) => ReactNode
+  currencyDisplay?: CurrencyDisplay
+}
+const CustomTooltip = ({ active, payload, label, labelFormatter, currencyDisplay }: PnLTooltipProps) => {
   if (!active || !payload || !payload.length) return null
 
   const entry = payload[0].payload
@@ -68,7 +75,7 @@ const CustomTooltip = ({ active, payload, label, labelFormatter, currencyDisplay
   return (
     <div className="bg-slate-800 border-2 border-slate-600 rounded-lg p-3 shadow-lg">
       <div className="text-slate-300 text-sm mb-2">
-        {labelFormatter ? labelFormatter(label) : label}
+        {labelFormatter && label !== undefined ? labelFormatter(label) : label}
       </div>
       {currencyDisplay === 'both' ? (
         <div className={`text-base font-semibold ${isProfit ? 'text-green-400' : 'text-red-400'}`}>

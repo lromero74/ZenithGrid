@@ -2,11 +2,19 @@ import { useCallback } from 'react'
 import { api } from '../../../services/api'
 import type { BotFormData, ValidationWarning, ValidationError } from '../../../components/bots'
 
+// Minimal portfolio shape this hook reads for aggregate-value validation.
+interface PortfolioSummary {
+  balance_breakdown?: { btc?: { total?: number } }
+  total_btc_value?: number
+  total_usd_value?: number
+}
+
 interface UseValidationProps {
   formData: BotFormData
   setValidationWarnings: (warnings: ValidationWarning[]) => void
   setValidationErrors: (errors: ValidationError[]) => void
-  portfolio: any
+  // Upstream hook types this as unknown; narrowed to PortfolioSummary at use.
+  portfolio: unknown
 }
 
 export function useValidation({
@@ -68,10 +76,11 @@ export function useValidation({
     const BTC_MINIMUM = 0.0001  // Minimum for BTC pairs
     const USD_MINIMUM = 1.0     // Minimum for USD pairs
 
-    if (portfolio) {
+    const portfolioSummary = portfolio as PortfolioSummary | null | undefined
+    if (portfolioSummary) {
       // Use balance_breakdown.btc.total which is the true aggregate (free + in positions)
-      const aggregateBtc = portfolio.balance_breakdown?.btc?.total || portfolio.total_btc_value || 0
-      const aggregateUsd = portfolio.total_usd_value || 0
+      const aggregateBtc = portfolioSummary.balance_breakdown?.btc?.total || portfolioSummary.total_btc_value || 0
+      const aggregateUsd = portfolioSummary.total_usd_value || 0
 
       // Validate base_order_value
       const baseOrderPct = formData.strategy_config.base_order_value

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import type { IChartApi, ISeriesApi, Time, Range } from 'lightweight-charts'
+import type { IChartApi, ISeriesApi, SeriesType, Time, Range } from 'lightweight-charts'
 import { loadChartLib } from '../../../utils/chartLib'
 import { getPriceFormat } from '../helpers'
 
@@ -10,7 +10,7 @@ export function useChartManagement(
 ) {
   const chartContainerRef = useRef<HTMLDivElement>(null)
   const chartRef = useRef<IChartApi | null>(null)
-  const mainSeriesRef = useRef<ISeriesApi<any> | null>(null)
+  const mainSeriesRef = useRef<ISeriesApi<SeriesType> | null>(null)
   const volumeSeriesRef = useRef<ISeriesApi<'Histogram'> | null>(null)
   const isSyncingRef = useRef<boolean>(false)
   const syncCallbacksRef = useRef<Map<string, (timeRange: Range<Time> | null) => void>>(new Map())

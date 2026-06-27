@@ -174,7 +174,7 @@ export default function Dashboard({ onNavigate }: DashboardProps) {
   const projections = useMemo(() => {
     if (bots.length === 0) return null
     const filteredBots = bots.filter((b: Bot) => showStoppedBots || b.is_active)
-    const totalDailyPnl = filteredBots.reduce((sum: number, bot: Bot) => sum + ((bot as any).avg_daily_pnl_usd || 0), 0)
+    const totalDailyPnl = filteredBots.reduce((sum: number, bot: Bot) => sum + (bot.avg_daily_pnl_usd || 0), 0)
     const portfolioUsd = accountValueSummary?.total_usd_value || 0
     const dailyRate = portfolioUsd > 0 ? totalDailyPnl / portfolioUsd : 0
     const projectPnl = (days: number) => totalDailyPnl * days

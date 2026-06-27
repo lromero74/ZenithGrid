@@ -1,4 +1,5 @@
 import { useRef, useState, useEffect } from 'react'
+import { isCanceledRequest } from '../../utils/apiError'
 import { useQuery } from '@tanstack/react-query'
 import { createChart, ColorType, IChartApi, ISeriesApi, Time, LineStyle } from 'lightweight-charts'
 import { api } from '../../services/api'
@@ -180,7 +181,7 @@ export function DealChart({ position, productId: initialProductId, currentPrice,
         setChartData(candles)
         candleDataRef.current = candles
       } catch (err) {
-        if ((err as any)?.code === 'ERR_CANCELED' || (err as any)?.name === 'CanceledError') return
+        if (isCanceledRequest(err)) return
         console.error('Error fetching candles:', err)
       }
     }

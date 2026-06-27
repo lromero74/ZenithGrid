@@ -30,8 +30,7 @@ export function DemoLogin({ username }: DemoLoginProps) {
       try {
         await login(username, username)
       } catch (err: unknown) {
-        const status = (err as any)?.status as
-          number | undefined
+        const status = (err as { status?: number })?.status
         const msg = err instanceof Error
           ? err.message : 'Login failed'
 

@@ -1,9 +1,10 @@
 import { useQuery } from '@tanstack/react-query'
 import { positionsApi } from '../../../services/api'
+import type { Position } from '../../../types'
 
 interface UsePositionTradesProps {
   selectedPosition: number | null
-  tradeHistoryPosition: any | null
+  tradeHistoryPosition: Position | null
   showTradeHistoryModal: boolean
 }
 

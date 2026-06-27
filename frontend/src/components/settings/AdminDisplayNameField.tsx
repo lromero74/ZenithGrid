@@ -9,7 +9,7 @@ export function AdminDisplayNameField() {
 
   useEffect(() => {
     api.get('/admin/users').then(res => {
-      const me = res.data.find((u: any) => u.is_superuser)
+      const me = res.data.find((u: { is_superuser?: boolean; admin_display_name?: string }) => u.is_superuser)
       if (me?.admin_display_name) {
         setSaved(me.admin_display_name)
         setValue(me.admin_display_name)

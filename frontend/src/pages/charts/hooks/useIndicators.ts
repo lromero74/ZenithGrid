@@ -9,7 +9,8 @@ import {
   calculateBollingerBands,
   calculateStochastic,
   AVAILABLE_INDICATORS,
-  type CandleData
+  type CandleData,
+  type IndicatorSettings
 } from '../../../utils/indicators'
 import type { IndicatorConfig } from '../../../components/charts'
 import { getPriceFormat } from '../helpers'
@@ -111,7 +112,7 @@ export function useIndicators({
   }
 
   // Update indicator settings
-  const updateIndicatorSettings = (indicatorId: string, newSettings: Record<string, unknown>) => {
+  const updateIndicatorSettings = (indicatorId: string, newSettings: IndicatorSettings) => {
     setIndicators(prev =>
       prev.map(ind =>
         ind.id === indicatorId ? { ...ind, settings: { ...ind.settings, ...newSettings } } : ind
@@ -165,7 +166,7 @@ export function useIndicators({
       const newSeries: ISeriesApi<SeriesType>[] = []
 
       if (indicator.type === 'sma') {
-        const smaValues = calculateSMA(closes, indicator.settings.period)
+        const smaValues = calculateSMA(closes, indicator.settings.period ?? 20)
         const smaData: LineData<Time>[] = []
         candles.forEach((c, i) => {
           if (smaValues[i] !== null) {
@@ -183,7 +184,7 @@ export function useIndicators({
       }
 
       if (indicator.type === 'ema') {
-        const emaValues = calculateEMA(closes, indicator.settings.period)
+        const emaValues = calculateEMA(closes, indicator.settings.period ?? 12)
         const emaData: LineData<Time>[] = []
         candles.forEach((c, i) => {
           if (emaValues[i] !== null) {
@@ -306,11 +307,11 @@ export function useIndicators({
         // Add overbought/oversold reference lines
         const overboughtData: LineData<Time>[] = candles.map(c => ({
           time: c.time as Time,
-          value: indicator.settings.overbought
+          value: indicator.settings.overbought ?? 70
         }))
         const oversoldData: LineData<Time>[] = candles.map(c => ({
           time: c.time as Time,
-          value: indicator.settings.oversold
+          value: indicator.settings.oversold ?? 30
         }))
 
         const obSeries = indicatorChart.addLineSeries({

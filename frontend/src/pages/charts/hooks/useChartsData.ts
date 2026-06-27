@@ -50,11 +50,11 @@ export function useChartsData(
 
     // Get list of assets in portfolio
     const portfolioAssets = new Set(
-      portfolio?.holdings?.map((h: any) => h.asset) || []
+      portfolio?.holdings?.map((h: { asset: string }) => h.asset) || []
     )
 
     // Convert products to trading pairs with portfolio indicator
-    const pairs = productsData.products.map((product: any) => {
+    const pairs = productsData.products.map((product: { base_currency: string; quote_currency: string; product_id: string }) => {
       const base = product.base_currency
       const quote = product.quote_currency
       const inPortfolio = portfolioAssets.has(base)

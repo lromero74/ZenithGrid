@@ -119,8 +119,7 @@ export default function Login() {
   const formatLoginError = (
     err: unknown, username: string
   ): string => {
-    const status = (err as any)?.status as
-      number | undefined
+    const status = (err as { status?: number })?.status
     const msg = err instanceof Error
       ? err.message : 'Login failed'
 
