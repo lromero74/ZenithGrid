@@ -780,7 +780,7 @@ export function CribbageMultiplayer({ roomId, players, playerNames, onLeave }: P
   const scoringStep = isHost ? gameState.scoringStep : (guestView?.scoringStep ?? 'nonDealer')
   const lastScoreBreakdown = isHost ? gameState.lastScoreBreakdown : (guestView?.lastScoreBreakdown ?? '')
 
-  const myHand = isHost ? gameState.hands[0] : (guestView?.myHand ?? [])
+  const myHand = useMemo(() => isHost ? gameState.hands[0] : (guestView?.myHand ?? []), [isHost, gameState, guestView])
   const oppHandCount = isHost ? gameState.hands[1].length : (guestView?.oppHandCount ?? 0)
   const oppHand = isHost ? gameState.hands[1] : (guestView?.oppHand ?? [])
   const showOppCards = phase === 'scoring' || phase === 'gameOver'
@@ -788,9 +788,9 @@ export function CribbageMultiplayer({ roomId, players, playerNames, onLeave }: P
   const myCribSubmitted = isHost ? gameState.cribSubmitted[0] : (guestView?.myCribSubmitted ?? false)
   const oppCribSubmitted = isHost ? gameState.cribSubmitted[1] : (guestView?.oppCribSubmitted ?? false)
 
-  const myPlayedIndices = isHost
+  const myPlayedIndices = useMemo(() => isHost
     ? new Set(gameState.playedIndices[0])
-    : new Set(guestView?.myPlayedIndices ?? [])
+    : new Set(guestView?.myPlayedIndices ?? []), [isHost, gameState, guestView])
 
   const isMyTurn = currentPlayer === myIdx
   const isScoring = phase === 'scoring'

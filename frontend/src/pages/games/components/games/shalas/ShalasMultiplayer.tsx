@@ -123,9 +123,9 @@ export function ShalasMultiplayer({ roomId, players, playerNames, onLeave }: Pro
 
   // ── Derived state ──────────────────────────────────────────────────
 
-  const myHand = gameState
+  const myHand = useMemo(() => gameState
     ? (myPlayerIndex === 0 ? gameState.hand : gameState.opponentHand)
-    : []
+    : [], [gameState, myPlayerIndex])
   const opponentHandCount = gameState
     ? (myPlayerIndex === 0 ? gameState.opponentHand.length : gameState.hand.length)
     : 0

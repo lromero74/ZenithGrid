@@ -296,8 +296,8 @@ export function SpeedMultiplayer({ roomId, players, playerNames, onLeave }: Prop
   // ── Card/pile click handlers ──────────────────────────────────────
 
   // Get valid moves for my hand
-  const myHand = isHost ? gameState.hands[0] : (guestView?.myHand ?? [])
-  const centerPiles = isHost ? gameState.centerPiles : (guestView?.centerPiles ?? [[], []] as [Card[], Card[]])
+  const myHand = useMemo(() => isHost ? gameState.hands[0] : (guestView?.myHand ?? []), [isHost, gameState, guestView])
+  const centerPiles = useMemo(() => isHost ? gameState.centerPiles : (guestView?.centerPiles ?? [[], []] as [Card[], Card[]]), [isHost, gameState, guestView])
   const phase = isHost ? gameState.phase : (guestView?.phase ?? 'ready')
 
   const playerMoves = useMemo(() => {

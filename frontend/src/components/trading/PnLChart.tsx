@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, type ReactNode } from 'react'
+import { useState, useEffect, useRef, useCallback, type ReactNode } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { createChart, ColorType, IChartApi, ISeriesApi, Time } from 'lightweight-charts'
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, Legend } from 'recharts'
@@ -188,7 +188,7 @@ export function PnLChart({ accountId, onTimeRangeChange }: PnLChartProps) {
   const enabledTimeRanges = getEnabledTimeRanges()
 
   // Filter data by time range
-  const getFilteredData = () => {
+  const getFilteredData = useCallback(() => {
     if (!data) return []
 
     const now = new Date()
@@ -229,7 +229,7 @@ export function PnLChart({ accountId, onTimeRangeChange }: PnLChartProps) {
     }
 
     return []
-  }
+  }, [activeTab, data, timeRange])
 
   // Helper to get YYYY-MM-DD string from a Date (using local date)
   const toDateStr = (d: Date): string => {
@@ -634,7 +634,7 @@ export function PnLChart({ accountId, onTimeRangeChange }: PnLChartProps) {
     if (chartRef.current) {
       chartRef.current.timeScale().fitContent()
     }
-  }, [data, activeTab, timeRange, currencyDisplay])
+  }, [data, activeTab, timeRange, currencyDisplay, getFilteredData])
 
   const stats = calculateStats()
 

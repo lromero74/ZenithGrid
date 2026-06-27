@@ -5,6 +5,11 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v3.14.9] - 2026-06-27
+
+### Changed
+- **All trading/account React Hooks dependency warnings resolved (no behavior change).** Finished the hook-dependency cleanup for every non-game view: the deal & price charts, the limit-close modal, the DCA budget configurator, the P&L chart, the trading chart, and the article reader now have correct, lint-clean effect dependencies (functions stabilized with `useCallback` from the linter's own analysis, true write-effects and continuously-ticking values documented as intentional). Also memoized derived hand/pile values in the multiplayer card games. The exhaustive-deps warning count is down to 32 (from 182), with the remainder confined to multiplayer game components. Verified behavior-identical by the full 2,792-test suite.
+
 ## [v3.14.8] - 2026-06-27
 
 ### Changed

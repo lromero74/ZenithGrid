@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState, useCallback } from 'react'
 import { createChart, IChartApi, ISeriesApi, ColorType, Time } from 'lightweight-charts'
 import { BarChart3, Activity } from 'lucide-react'
 import type { Candle } from '../../types'
@@ -41,7 +41,7 @@ export default function TradingChart({ productId = 'ETH-BTC' }: TradingChartProp
   const [loading, setLoading] = useState(true)
 
   // Fetch candle data
-  const fetchCandles = async (interval: string) => {
+  const fetchCandles = useCallback(async (interval: string) => {
     setLoading(true)
     try {
       const response = await fetch(
@@ -62,7 +62,7 @@ export default function TradingChart({ productId = 'ETH-BTC' }: TradingChartProp
     } finally {
       setLoading(false)
     }
-  }
+  }, [productId])
 
   // Calculate MACD
   const calculateMACD = (candles: Candle[], fastPeriod = 12, slowPeriod = 26, signalPeriod = 9) => {
@@ -311,7 +311,7 @@ export default function TradingChart({ productId = 'ETH-BTC' }: TradingChartProp
     }
 
     loadData()
-  }, [timeframe, showVolume, showMACD])
+  }, [timeframe, showVolume, showMACD, fetchCandles])
 
   return (
     <div className="space-y-4">

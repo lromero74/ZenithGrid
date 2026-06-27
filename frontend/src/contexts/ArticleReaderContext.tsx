@@ -1019,6 +1019,12 @@ export function ArticleReaderProvider({ children }: ArticleReaderProviderProps) 
 
     // Voice cache
     getVoiceForArticle,
+    // currentTime/duration are deliberately excluded from the deps below: they
+    // tick continuously during playback, and recomputing this context value (and
+    // re-rendering every consumer) on every tick would be a perf regression. The
+    // values here are snapshots; consumers needing live position use
+    // getPlaybackState(). Every other tts.* field IS listed.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }), [
     playlist, currentIndex, isPlaying, showMiniPlayer, isExpanded, currentArticle,
     tts.isLoading, tts.isPaused, tts.isReady, tts.error, tts.words,
