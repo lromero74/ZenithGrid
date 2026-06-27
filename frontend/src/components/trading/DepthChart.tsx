@@ -56,7 +56,7 @@ export function DepthChart({ productId, limitPrice, breakevenPrice, quoteCurrenc
           const bestAsk = processedAsks[0].price  // First ask is best (lowest)
           onOrderBookUpdate(lowestBid, highestAsk, bestBid, bestAsk)
         }
-      } catch (err: any) {
+      } catch (err) {
         console.error('Failed to fetch orderbook:', err)
         setError('Failed to load')
         setLoading(false)

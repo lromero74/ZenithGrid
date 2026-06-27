@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, MutableRefObject } from 'react'
-import type { IChartApi, ISeriesApi, Time, LineData, Range } from 'lightweight-charts'
+import type { IChartApi, ISeriesApi, Time, LineData, HistogramData, Range, SeriesType } from 'lightweight-charts'
 import { loadChartLib } from '../../../utils/chartLib'
 import {
   calculateSMA,
@@ -13,6 +13,10 @@ import {
 } from '../../../utils/indicators'
 import type { IndicatorConfig } from '../../../components/charts'
 import { getPriceFormat } from '../helpers'
+
+// lightweight-charts has no public API to attach the resize listener to a chart,
+// so we stash it on the instance to detach it on cleanup.
+type ChartWithResize = IChartApi & { __resizeHandler?: () => void }
 
 interface UseIndicatorsProps {
   chartRef: MutableRefObject<IChartApi | null>
@@ -45,7 +49,7 @@ export function useIndicators({
   const [indicatorSearch, setIndicatorSearch] = useState('')
   const [editingIndicator, setEditingIndicator] = useState<IndicatorConfig | null>(null)
 
-  const indicatorSeriesRef = useRef<Map<string, ISeriesApi<any>[]>>(new Map())
+  const indicatorSeriesRef = useRef<Map<string, ISeriesApi<SeriesType>[]>>(new Map())
 
   // Save indicators to localStorage
   useEffect(() => {
@@ -107,7 +111,7 @@ export function useIndicators({
   }
 
   // Update indicator settings
-  const updateIndicatorSettings = (indicatorId: string, newSettings: Record<string, any>) => {
+  const updateIndicatorSettings = (indicatorId: string, newSettings: Record<string, unknown>) => {
     setIndicators(prev =>
       prev.map(ind =>
         ind.id === indicatorId ? { ...ind, settings: { ...ind.settings, ...newSettings } } : ind
@@ -158,7 +162,7 @@ export function useIndicators({
         indicatorSeriesRef.current.delete(indicator.id)
       }
 
-      const newSeries: ISeriesApi<any>[] = []
+      const newSeries: ISeriesApi<SeriesType>[] = []
 
       if (indicator.type === 'sma') {
         const smaValues = calculateSMA(closes, indicator.settings.period)
@@ -257,7 +261,7 @@ export function useIndicators({
         })
 
         // Add overbought zone shading (70-100)
-        const overboughtFillData: any[] = candles.map(c => ({
+        const overboughtFillData: LineData<Time>[] = candles.map(c => ({
           time: c.time as Time,
           value: 100,
         }))
@@ -275,7 +279,7 @@ export function useIndicators({
         overboughtFillSeries.setData(overboughtFillData)
 
         // Add oversold zone shading (0-30)
-        const oversoldFillData: any[] = candles.map(c => ({
+        const oversoldFillData: LineData<Time>[] = candles.map(c => ({
           time: c.time as Time,
           value: 0,
         }))
@@ -343,7 +347,7 @@ export function useIndicators({
 
         const macdData: LineData<Time>[] = []
         const signalData: LineData<Time>[] = []
-        const histogramData: any[] = []
+        const histogramData: HistogramData<Time>[] = []
 
         candles.forEach((c, i) => {
           if (macd[i] !== null) {
@@ -494,7 +498,7 @@ export function useIndicators({
       }
       window.addEventListener('resize', handleIndicatorResize)
       // Store the resize handler in a data attribute so we can remove it later
-      ;(chart as any).__resizeHandler = handleIndicatorResize
+      ;(chart as ChartWithResize).__resizeHandler = handleIndicatorResize
 
       indicatorChartsRef.current.set(indicator.id, chart)
       })
@@ -515,7 +519,7 @@ export function useIndicators({
           syncCallbacksRef.current.delete(id)
         }
         // Remove resize handler
-        const resizeHandler = (chart as any).__resizeHandler
+        const resizeHandler = (chart as ChartWithResize).__resizeHandler
         if (resizeHandler) {
           window.removeEventListener('resize', resizeHandler)
         }
@@ -548,7 +552,7 @@ export function useIndicators({
           syncCallbacksRef.current.delete(id)
         }
         // Remove resize handler
-        const resizeHandler = (chart as any).__resizeHandler
+        const resizeHandler = (chart as ChartWithResize).__resizeHandler
         if (resizeHandler) {
           window.removeEventListener('resize', resizeHandler)
         }

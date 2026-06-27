@@ -1,3 +1,66 @@
+// Minimal structural type for a React Query mutation passed to a child as a
+// prop. Components that only fire the mutation need just `.mutate`; the real
+// `UseMutationResult` object (with isPending, etc.) is assignable to this.
+export interface MutationLike<TVars = void> {
+  mutate: (variables: TVars) => void;
+}
+
+// Bot strategy configuration. Stored backend-side as an open JSON dict, so the
+// known fields are typed strictly while the index signature carries any extra
+// keys forms may set (as `unknown`, never `any`). The same shape is used for a
+// bot's live config and for the snapshot frozen onto a position at open.
+export interface StrategyConfig {
+  // sizing
+  base_order_percentage?: number;
+  base_order_value?: number;
+  base_order_size?: number;
+  dca_order_value?: number;
+  safety_order_percentage?: number;
+  safety_order_step_scale?: number;
+  price_deviation?: number;
+  dca_target_reference?: string;
+  initial_budget_percentage?: number;
+  use_manual_sizing?: boolean;
+  max_safety_orders?: number;
+  // profit / risk
+  take_profit_percentage?: number;
+  min_profit_percentage?: number;
+  default_tp_pct?: number;
+  default_sl_pct?: number;
+  trailing_take_profit?: boolean;
+  trailing_tp_deviation?: number;
+  stop_loss_enabled?: boolean;
+  stop_loss_percentage?: number;
+  risk_tolerance?: string;
+  // concurrency / cadence
+  max_concurrent_deals?: number;
+  max_concurrent_positions?: number;
+  max_simultaneous_same_pair?: number;
+  check_interval_seconds?: number;
+  enable_soft_ceiling?: boolean;
+  // categories / AI
+  ai_provider?: string;
+  ai_risk_preset?: string;
+  allowed_categories?: string[];
+  is_speculative?: boolean;
+  max_synthetic_pct?: number;
+  // direction / perps
+  direction?: string;
+  leverage?: number;
+  margin_type?: string;
+  // grid strategy state (shape owned by GridVisualizer; opaque here)
+  grid_state?: unknown;
+  // open-ended tail — forms may set additional config keys
+  [key: string]: unknown;
+}
+
+// Perps portfolio summary block (open dict; known reads typed).
+export interface PerpsSummary {
+  total_usd_value?: number;
+  is_refreshing?: boolean;
+  [key: string]: unknown;
+}
+
 export interface Position {
   id: number;
   user_id?: number | null;  // Owner (for user-specific deal numbers)
@@ -6,7 +69,7 @@ export interface Position {
   product_id?: string;
   status: string;
   account_id?: number | null;  // For multi-account support
-  bot_config?: Record<string, any>;  // Snapshot of bot config at position open
+  bot_config?: StrategyConfig;  // Snapshot of bot config at position open
   opened_at: string;
   closed_at: string | null;
   exit_reason?: string | null;
@@ -43,7 +106,7 @@ export interface Position {
   btc_usd_price_at_open?: number;
   btc_usd_price_at_close?: number;
   profit_usd?: number;
-  strategy_config_snapshot?: Record<string, any>;  // Snapshot of bot config when position opened
+  strategy_config_snapshot?: StrategyConfig;  // Snapshot of bot config when position opened
   pending_orders_count?: number;  // Count of unfilled limit orders (for Active orders display)
   last_error_message?: string | null;  // Last error message (for UI display)
   last_error_timestamp?: string | null;  // When the error occurred
@@ -119,14 +182,14 @@ export interface AIBotLog {
   current_price: number | null;
   position_status: string | null;
   product_id: string | null;
-  context: any;
+  context: unknown;
 }
 
 export interface AIToolCall {
   name: string;
-  input: Record<string, any>;
+  input: Record<string, unknown>;
   output_summary?: string | null;
-  output?: any;
+  output?: unknown;
   turn?: number;
 }
 
@@ -270,7 +333,7 @@ export interface StrategyParameter {
   options?: string[];
   required?: boolean;
   group?: string;
-  visible_when?: Record<string, any>;
+  visible_when?: Record<string, unknown>;
   paper_trading_only?: boolean;
 }
 
@@ -287,13 +350,14 @@ export interface Bot {
   description: string | null;
   market_type?: 'spot' | 'perps';  // "spot" or "perps"
   strategy_type: string;
-  strategy_config: Record<string, any>;
+  strategy_config: StrategyConfig;
   product_id: string;
   product_ids?: string[];  // Multi-pair support
   split_budget_across_pairs?: boolean;
   reserved_btc_balance: number;
   reserved_usd_balance: number;
   budget_percentage: number;
+  check_interval_seconds?: number;  // Bot poll interval (model column; defaults to 300)
   is_active: boolean;
   created_at: string;
   updated_at: string;
@@ -328,7 +392,7 @@ export interface BotCreate {
   description?: string;
   market_type?: 'spot' | 'perps';
   strategy_type: string;
-  strategy_config: Record<string, any>;
+  strategy_config: StrategyConfig;
   product_id: string;
   reserved_btc_balance?: number;
   reserved_usd_balance?: number;
@@ -366,8 +430,8 @@ export interface PerpsPosition {
 
 export interface PerpsPortfolio {
   portfolio_uuid: string;
-  summary: Record<string, any>;
-  balances: Record<string, any>;
+  summary: PerpsSummary;
+  balances: Record<string, unknown>;
 }
 
 export interface BotStats {
@@ -677,7 +741,7 @@ export interface ReportSummary {
   period_start: string | null
   period_end: string | null
   periodicity: string
-  report_data?: Record<string, any> | null
+  report_data?: Record<string, unknown> | null
   ai_summary?: string | TieredAISummary | null
   ai_provider_used?: string | null
   delivery_status: string

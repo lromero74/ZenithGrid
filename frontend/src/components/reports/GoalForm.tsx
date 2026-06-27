@@ -195,7 +195,7 @@ export function GoalForm({ isOpen, onClose, onSubmit, initialData, readOnly }: G
               <label className="block text-sm font-medium text-slate-300 mb-1">Target Type</label>
               <select
                 value={targetType}
-                onChange={e => setTargetType(e.target.value as any)}
+                onChange={e => setTargetType(e.target.value as 'balance' | 'profit' | 'both' | 'income' | 'expenses')}
                 className="w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white focus:outline-none focus:border-blue-500"
               >
                 <option value="balance">Balance</option>
@@ -209,7 +209,7 @@ export function GoalForm({ isOpen, onClose, onSubmit, initialData, readOnly }: G
               <label className="block text-sm font-medium text-slate-300 mb-1">Currency</label>
               <select
                 value={targetCurrency}
-                onChange={e => setTargetCurrency(e.target.value as any)}
+                onChange={e => setTargetCurrency(e.target.value as 'USD' | 'BTC')}
                 className="w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white focus:outline-none focus:border-blue-500"
               >
                 <option value="USD">USD</option>
@@ -224,7 +224,7 @@ export function GoalForm({ isOpen, onClose, onSubmit, initialData, readOnly }: G
                 <label className="block text-sm font-medium text-slate-300 mb-1">Expense Period</label>
                 <select
                   value={expensePeriod}
-                  onChange={e => setExpensePeriod(e.target.value as any)}
+                  onChange={e => setExpensePeriod(e.target.value as 'weekly' | 'monthly' | 'quarterly' | 'yearly')}
                   className="w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white focus:outline-none focus:border-blue-500"
                 >
                   {EXPENSE_PERIOD_OPTIONS.map(o => (
@@ -271,7 +271,7 @@ export function GoalForm({ isOpen, onClose, onSubmit, initialData, readOnly }: G
                 <label className="block text-sm font-medium text-slate-300 mb-1">Income Period</label>
                 <select
                   value={incomePeriod}
-                  onChange={e => setIncomePeriod(e.target.value as any)}
+                  onChange={e => setIncomePeriod(e.target.value as 'daily' | 'weekly' | 'monthly' | 'yearly')}
                   className="w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white focus:outline-none focus:border-blue-500"
                 >
                   {INCOME_PERIOD_OPTIONS.map(o => (

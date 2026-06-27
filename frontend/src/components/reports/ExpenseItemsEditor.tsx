@@ -43,8 +43,8 @@ export function ExpenseItemsEditor({ goalId, expensePeriod, currency, onClose, r
     queryKey: ['expense-items', goalId],
     queryFn: () => reportsApi.getExpenseItems(goalId),
   })
-  const items: ExpenseItem[] = (expenseData as any)?.items ?? []
-  const coverageSummary: Record<string, any> = (expenseData as any)?.coverage_summary ?? {}
+  const items: ExpenseItem[] = expenseData?.items ?? []
+  const coverageSummary: Record<string, unknown> = expenseData?.coverage_summary ?? {}
 
   // Local ordered list for optimistic drag reorder
   const [localItems, setLocalItems] = useState<ExpenseItem[]>([])
@@ -200,11 +200,12 @@ export function ExpenseItemsEditor({ goalId, expensePeriod, currency, onClose, r
   }
 
   const createItem = useMutation({
-    mutationFn: (data: any) => reportsApi.createExpenseItem(goalId, data),
+    mutationFn: (data: Partial<ExpenseItem>) =>
+      reportsApi.createExpenseItem(goalId, data as Parameters<typeof reportsApi.createExpenseItem>[1]),
     onSuccess: () => { invalidate(); resetForm() },
   })
   const updateItem = useMutation({
-    mutationFn: ({ id, data }: { id: number; data: any }) => reportsApi.updateExpenseItem(goalId, id, data),
+    mutationFn: ({ id, data }: { id: number; data: Partial<ExpenseItem> }) => reportsApi.updateExpenseItem(goalId, id, data),
     onSuccess: () => { invalidate(); resetForm() },
   })
   const deleteItem = useMutation({
@@ -272,7 +273,7 @@ export function ExpenseItemsEditor({ goalId, expensePeriod, currency, onClose, r
     const finalCategory = category === '__custom__' ? customCategory : category
 
     if (isSavings) {
-      const data: any = {
+      const data: Partial<ExpenseItem> = {
         item_type: 'savings_target',
         category: finalCategory,
         name,
@@ -293,7 +294,7 @@ export function ExpenseItemsEditor({ goalId, expensePeriod, currency, onClose, r
       return
     }
 
-    const data: any = {
+    const data: Partial<ExpenseItem> = {
       item_type: 'expense',
       category: finalCategory,
       name,

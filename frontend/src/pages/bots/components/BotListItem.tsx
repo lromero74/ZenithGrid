@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, memo } from 'react'
-import { Bot, AggregateValue } from '../../../types'
+import { Bot, AggregateValue, StrategyDefinition, MutationLike } from '../../../types'
 import { Account } from '../../../contexts/AccountContext'
 import { RebalanceStatus } from '../../../services/api'
 import { Edit, Eye, Trash2, Copy, Brain, MoreVertical, BarChart2, XCircle, DollarSign, ScanLine, ArrowRightLeft, ChevronDown, ChevronUp, Download, Clipboard } from 'lucide-react'
@@ -10,26 +10,26 @@ import { computeEffectiveAggregateValues, calculateSoftCeiling, EXCHANGE_MINIMUM
 
 interface BotListItemProps {
   bot: Bot
-  strategies: any[]
+  strategies: StrategyDefinition[]
   strategyName?: string
   botAccount?: Account
   handleOpenEdit: (bot: Bot) => void
   handleDelete: (bot: Bot) => void
-  startBot: any
-  stopBot: any
-  cloneBot: any
-  copyToAccount: any
+  startBot: MutationLike<number>
+  stopBot: MutationLike<number>
+  cloneBot: MutationLike<number>
+  copyToAccount: MutationLike<{ id: number; targetAccountId: number }>
   accounts: Account[]
   currentAccountId?: number
-  forceRunBot: any
-  cancelAllPositions: any
-  sellAllPositions: any
+  forceRunBot: MutationLike<number>
+  cancelAllPositions: MutationLike<number>
+  sellAllPositions: MutationLike<number>
   openMenuId: number | null
   setOpenMenuId: (id: number | null) => void
   setAiLogsBotId: (id: number | null) => void
   setIndicatorLogsBotId: (id: number | null) => void
   setScannerLogsBotId: (id: number | null) => void
-  portfolio?: any
+  portfolio?: unknown
   aggregateData?: AggregateValue
   rebalanceStatus?: RebalanceStatus
   botsFetching?: boolean
@@ -64,7 +64,7 @@ export const BotListItem = memo(function BotListItem({
 }: BotListItemProps) {
   const { addToast } = useNotifications()
   const confirm = useConfirm()
-  const botPairs = ((bot as any).product_ids || [bot.product_id])
+  const botPairs = (bot.product_ids || [bot.product_id])
   const strategyName = propStrategyName || strategies.find((s) => s.id === bot.strategy_type)?.name || bot.strategy_type
   const botAccount = propBotAccount || accounts.find(a => a.id === bot.account_id)
   const exchangeName = botAccount?.exchange || 'coinbase'
@@ -155,7 +155,7 @@ export const BotListItem = memo(function BotListItem({
                 {exchangeName === 'bybit' ? 'BYBIT' : exchangeName === 'mt5_bridge' ? 'MT5' : exchangeName.toUpperCase()}
               </span>
             )}
-            {(bot as any).insufficient_funds && (
+            {bot.insufficient_funds && (
               <span
                 className="text-amber-500 text-sm"
                 title="Insufficient funds to open new positions"
@@ -163,7 +163,7 @@ export const BotListItem = memo(function BotListItem({
                 💰
               </span>
             )}
-            {(bot as any).rebalancer_gated && (
+            {bot.rebalancer_gated && (
               <span
                 className="px-1 py-0.5 text-[9px] font-semibold bg-orange-500/20 text-orange-300 rounded"
                 title="Rebalancer active — new base orders paused until quote currency rebalances"
@@ -230,8 +230,9 @@ export const BotListItem = memo(function BotListItem({
           (() => {
             const configuredMax =
               bot.strategy_config.max_concurrent_deals ||
-              bot.strategy_config.max_concurrent_positions
-            const scEnabled = !!(bot.strategy_config as any)?.enable_soft_ceiling
+              bot.strategy_config.max_concurrent_positions ||
+              0
+            const scEnabled = !!bot.strategy_config?.enable_soft_ceiling
 
             // 1. Try to use the backend-computed value if available
             let scMax = scEnabled
@@ -329,8 +330,8 @@ export const BotListItem = memo(function BotListItem({
       {/* Win Rate */}
       <td className="hidden md:table-cell px-1 sm:px-2 py-2 text-right w-16">
         {(() => {
-          const winRate = (bot as any).win_rate || 0
-          const closedCount = (bot as any).closed_positions_count || 0
+          const winRate = bot.win_rate || 0
+          const closedCount = bot.closed_positions_count || 0
           const colorClass = closedCount === 0 ? 'text-slate-500' :
             winRate >= 70 ? 'text-green-400' :
             winRate >= 50 ? 'text-yellow-400' :
@@ -346,10 +347,10 @@ export const BotListItem = memo(function BotListItem({
       {/* PnL */}
       <td className="px-1 sm:px-2 py-2 text-right whitespace-nowrap">
         {(() => {
-          const pnlUsd = (bot as any).total_pnl_usd || 0
-          const pnlBtc = (bot as any).total_pnl_btc || 0
-          const pnlPct = (bot as any).total_pnl_percentage || 0
-          const quoteCurrency = (bot as any).quote_currency || 'BTC'
+          const pnlUsd = bot.total_pnl_usd || 0
+          const pnlBtc = bot.total_pnl_btc || 0
+          const pnlPct = bot.total_pnl_percentage || 0
+          const quoteCurrency = bot.quote_currency || 'BTC'
           const isUsd = quoteCurrency === 'USD'
           const primaryPnl = isUsd ? pnlUsd : pnlBtc
           const isPositive = primaryPnl > 0
@@ -622,8 +623,8 @@ export const BotListItem = memo(function BotListItem({
                       strategy_type: bot.strategy_type,
                       strategy_config: bot.strategy_config,
                       product_id: bot.product_id,
-                      product_ids: (bot as any).product_ids,
-                      split_budget_across_pairs: (bot as any).split_budget_across_pairs,
+                      product_ids: bot.product_ids,
+                      split_budget_across_pairs: bot.split_budget_across_pairs,
                       budget_percentage: bot.budget_percentage,
                     }
                     const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' })
@@ -650,8 +651,8 @@ export const BotListItem = memo(function BotListItem({
                       strategy_type: bot.strategy_type,
                       strategy_config: bot.strategy_config,
                       product_id: bot.product_id,
-                      product_ids: (bot as any).product_ids,
-                      split_budget_across_pairs: (bot as any).split_budget_across_pairs,
+                      product_ids: bot.product_ids,
+                      split_budget_across_pairs: bot.split_budget_across_pairs,
                       budget_percentage: bot.budget_percentage,
                     }
                     try {

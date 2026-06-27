@@ -1,5 +1,6 @@
 import {
   ConditionExpression,
+  ConditionGroup,
   createEmptyExpression,
   Condition,
 } from './AdvancedConditionBuilder'
@@ -19,14 +20,14 @@ export const safeParseInt = (value: string): number | undefined => {
 // Numeric input helper — allows the field to be empty while typing,
 // applies the default only when the user leaves the field blank.
 export const numericProps = (
-  current: any,
+  current: number | string | null | undefined,
   fallback: number,
-  commit: (v: number) => void,
+  commit: (v: number | '') => void,
   isInt = false,
 ) => ({
   value: current === '' || current === null || current === undefined ? '' : current,
   onChange: (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.value === '') { commit('' as any); return }
+    if (e.target.value === '') { commit(''); return }
     const v = isInt ? safeParseInt(e.target.value) : safeParseFloat(e.target.value)
     if (v !== undefined) commit(v)
   },
@@ -123,26 +124,35 @@ export function calculateDCABudget(
   }
 }
 
+// A condition as stored in the DB / strategy_config: a partial Condition that
+// may carry `indicator` instead of the frontend's `type`. Trusted on read.
+type RawStoredCondition = Partial<Condition> & { indicator?: string }
+
+// Stored conditions are either a grouped expression or a legacy flat array.
+type RawStoredGroup = Partial<ConditionGroup> & { conditions?: RawStoredCondition[] }
+type RawStoredExpression = { groups?: RawStoredGroup[]; groupLogic?: 'and' | 'or' }
+
 // Normalize conditions from DB format (indicator) to frontend format (type).
 // DB stores: { indicator: "ai_buy", ... }
 // Frontend expects: { type: "ai_buy", ... }
-export function normalizeCondition(c: any): Condition {
+export function normalizeCondition(c: RawStoredCondition): Condition {
   return {
     ...c,
     type: (c.type || c.indicator) as ConditionType,
     negate: c.negate || false,
-  }
+  } as Condition
 }
 
 // Convert stored conditions (flat array or expression) to ConditionExpression.
-export function toConditionExpression(stored: any, logic: 'and' | 'or' = 'and'): ConditionExpression {
-  if (stored && stored.groups && Array.isArray(stored.groups)) {
+export function toConditionExpression(stored: unknown, logic: 'and' | 'or' = 'and'): ConditionExpression {
+  const expr = stored as RawStoredExpression | null
+  if (expr && Array.isArray(expr.groups)) {
     return {
-      groups: stored.groups.map((g: any) => ({
+      groups: expr.groups.map((g): ConditionGroup => ({
         ...g,
         conditions: (g.conditions || []).map(normalizeCondition),
-      })),
-      groupLogic: stored.groupLogic || 'and',
+      } as ConditionGroup)),
+      groupLogic: expr.groupLogic || 'and',
     }
   }
 
@@ -150,7 +160,7 @@ export function toConditionExpression(stored: any, logic: 'and' | 'or' = 'and'):
     return {
       groups: [{
         id: `grp_legacy_${Date.now()}`,
-        conditions: stored.map(normalizeCondition),
+        conditions: (stored as RawStoredCondition[]).map(normalizeCondition),
         logic,
       }],
       groupLogic: 'and',

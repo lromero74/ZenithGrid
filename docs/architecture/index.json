@@ -1,6 +1,6 @@
 {
   "project": "BTC-Bot",
-  "version": "v3.14.0",
+  "version": "v3.14.1",
   "updated": "2026-06-27",
   "description": "Big Truckin' Crypto Bot - Autonomous trading platform with multi-strategy support, AI-powered analysis, and real-time monitoring",
   "split_files": {
@@ -28,7 +28,7 @@
       "routing": "react-router-dom"
     },
     "deployment": {
-      "platform": "AWS Lightsail (instance 'zenithgrid', us-east-1, 4GB/2vCPU, static IP 52.87.130.244, Ubuntu 24.04, native — no containers). Migrated off fedora.local 2026-06-13.",
+      "platform": "AWS Lightsail (instance 'zenithgrid', us-east-1, 4GB/2vCPU, static IP 52.87.130.244, Ubuntu 24.04, native \u2014 no containers). Migrated off fedora.local 2026-06-13.",
       "process_manager": "systemd (system unit)",
       "services": [
         "zenithgrid.service (native uvicorn on 127.0.0.1:8100)",

@@ -2,7 +2,7 @@ import { useQuery } from '@tanstack/react-query'
 import { positionsApi, botsApi, orderHistoryApi, authFetch } from '../services/api'
 import { TrendingUp, TrendingDown, AlertTriangle, ChevronDown, ChevronUp, Building2, Wallet, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Filter } from 'lucide-react'
 import { useState, useEffect, useMemo } from 'react'
-import type { Trade, AIBotLog, Position, Bot } from '../types'
+import type { Trade, AIBotLog, Position, Bot, OrderHistory } from '../types'
 import { LoadingSpinner } from '../components/shared/LoadingSpinner'
 import { formatDateTime } from '../utils/dateFormat'
 import { useAccount, getChainName } from '../contexts/AccountContext'
@@ -110,7 +110,7 @@ function ClosedPositions() {
         if (quote) marketSet.add(quote)
       })
     } else {
-      failedOrders.forEach((o: any) => {
+      failedOrders.forEach((o: OrderHistory) => {
         const quote = (o.product_id || 'ETH-BTC').split('-')[1]
         if (quote) marketSet.add(quote)
       })
@@ -125,7 +125,7 @@ function ClosedPositions() {
           return matchesMarket(p.product_id || '', m)
         }).length
       } else {
-        count = failedOrders.filter((o: any) => {
+        count = failedOrders.filter((o: OrderHistory) => {
           if (filterBot !== 'all') {
             const botName = botNameById.get(filterBot as number)
             if (!botName || o.bot_name !== botName) return false
@@ -143,7 +143,7 @@ function ClosedPositions() {
     if (activeTab === 'closed') {
       allClosedPositions.forEach((p: Position) => { if (p.bot_id) botIdSet.add(p.bot_id) })
     } else {
-      failedOrders.forEach((o: any) => {
+      failedOrders.forEach((o: OrderHistory) => {
         const botId = botIdByName.get(o.bot_name)
         if (botId !== undefined) botIdSet.add(botId)
       })
@@ -161,7 +161,7 @@ function ClosedPositions() {
         }).length
       } else {
         const botName = botNameById.get(id)
-        count = failedOrders.filter((o: any) => {
+        count = failedOrders.filter((o: OrderHistory) => {
           if (o.bot_name !== botName) return false
           if (!matchesMarket(o.product_id || '', filterMarket)) return false
           if (filterPair !== 'all' && o.product_id !== filterPair) return false
@@ -177,7 +177,7 @@ function ClosedPositions() {
     if (activeTab === 'closed') {
       allClosedPositions.forEach((p: Position) => { if (p.product_id) pairSet.add(p.product_id) })
     } else {
-      failedOrders.forEach((o: any) => { if (o.product_id) pairSet.add(o.product_id) })
+      failedOrders.forEach((o: OrderHistory) => { if (o.product_id) pairSet.add(o.product_id) })
     }
 
     return Array.from(pairSet).map(pair => {
@@ -190,7 +190,7 @@ function ClosedPositions() {
           return true
         }).length
       } else {
-        count = failedOrders.filter((o: any) => {
+        count = failedOrders.filter((o: OrderHistory) => {
           if (o.product_id !== pair) return false
           if (filterBot !== 'all') {
             const botName = botNameById.get(filterBot as number)
@@ -221,7 +221,7 @@ function ClosedPositions() {
 
   // Filter failed orders (all three filters applied)
   const filteredFailedOrders = useMemo(() => {
-    return failedOrders.filter((o: any) => {
+    return failedOrders.filter((o: OrderHistory) => {
       if (filterBot !== 'all') {
         const botName = botNameById.get(filterBot as number)
         if (!botName || o.bot_name !== botName) return false
@@ -778,7 +778,7 @@ function ClosedPositions() {
             ) : (
               <>
                 <div className="space-y-3">
-                  {filteredFailedOrders.map((order: any) => (
+                  {filteredFailedOrders.map((order: OrderHistory) => (
                     <div key={order.id} className="bg-slate-800 rounded-lg border border-red-900/30 p-4">
                       <div className="grid grid-cols-1 md:grid-cols-7 gap-4">
                         <div>

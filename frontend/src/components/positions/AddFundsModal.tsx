@@ -8,6 +8,7 @@ import { useState, useEffect, useMemo } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { X, AlertTriangle, Info } from 'lucide-react'
 import { accountApi, positionsApi } from '../../services/api'
+import { getApiErrorMessage } from '../../utils/apiError'
 import type { Position } from '../../types'
 
 // Exchange minimums (from backend/app/order_validation.py)
@@ -134,8 +135,8 @@ export function AddFundsModal({ position, isOpen, onClose, onSuccess, readOnly =
       await positionsApi.addFunds(position.id, amount)
       onSuccess()
       onClose()
-    } catch (err: any) {
-      setError(err.response?.data?.detail || err.message || 'Failed to add funds')
+    } catch (err) {
+      setError(getApiErrorMessage(err, err instanceof Error && err.message ? err.message : 'Failed to add funds'))
     } finally {
       setIsSubmitting(false)
     }

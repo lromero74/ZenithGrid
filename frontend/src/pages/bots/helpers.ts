@@ -1,6 +1,13 @@
 import { Bot } from '../../types'
 
-function conditionUsesAI(cond: any): boolean {
+// A single entry/DCA/exit condition. The backend stores these as open dicts;
+// only the indicator identity is needed here.
+type ConditionLike = { type?: string; indicator?: string }
+
+// Grouped-condition container: { groups: [{ conditions: [...] }] }
+type ConditionGroups = { groups?: Array<{ conditions?: ConditionLike[] }> }
+
+function conditionUsesAI(cond: ConditionLike): boolean {
   const indicatorType = cond.type || cond.indicator
   return indicatorType === 'ai_buy' || indicatorType === 'ai_sell'
 }
@@ -29,8 +36,8 @@ function botUsesAIIndicators(bot: Bot): boolean {
       }
     }
     // Handle grouped format: {groups: [{conditions: [...]}]}
-    else if (conditions && typeof conditions === 'object' && conditions.groups) {
-      for (const group of conditions.groups) {
+    else if (conditions && typeof conditions === 'object' && 'groups' in conditions) {
+      for (const group of (conditions as ConditionGroups).groups ?? []) {
         if (Array.isArray(group.conditions)) {
           for (const cond of group.conditions) {
             if (conditionUsesAI(cond)) return true
@@ -94,8 +101,8 @@ function botUsesNonAIIndicators(bot: Bot): boolean {
       return true
     }
     // Handle grouped format: {groups: [{conditions: [...]}]}
-    else if (conditions && typeof conditions === 'object' && conditions.groups) {
-      for (const group of conditions.groups) {
+    else if (conditions && typeof conditions === 'object' && 'groups' in conditions) {
+      for (const group of (conditions as ConditionGroups).groups ?? []) {
         if (Array.isArray(group.conditions) && group.conditions.length > 0) {
           return true
         }

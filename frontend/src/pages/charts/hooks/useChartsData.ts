@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { useAccountPortfolio } from '../../../hooks/useAccountPortfolio'
 import { authFetch, api } from '../../../services/api'
+import { getApiErrorMessage, isCanceledRequest } from '../../../utils/apiError'
 import type { CandleData } from '../../../utils/indicators'
 
 export function useChartsData(
@@ -116,11 +117,11 @@ export function useChartsData(
 
         candleDataRef.current = candles
         setDataVersion(v => v + 1)
-      } catch (err: any) {
+      } catch (err) {
         // Ignore aborts (pair/interval switched) — not a real error.
-        if (cancelled || err?.code === 'ERR_CANCELED' || err?.name === 'CanceledError') return
+        if (cancelled || isCanceledRequest(err)) return
         console.error('Error fetching candles:', err)
-        setError(err.response?.data?.detail || 'Failed to load chart data')
+        setError(getApiErrorMessage(err, 'Failed to load chart data'))
       } finally {
         if (!cancelled) setLoading(false)
       }

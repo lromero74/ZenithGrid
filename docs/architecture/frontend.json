@@ -48,7 +48,7 @@
     {
       "file": "pages/Reports.tsx",
       "route": "/reports",
-      "purpose": "Financial goals with progress tracking and trend charts, report schedules, generated report history; goal cards show separate expense and savings-target item counts; 'Manage Items' button opens ExpenseItemsEditor. Report schedule cards now include a pause/resume toggle button (sets ReportSchedule.is_active) so users can suspend delivery without deleting the schedule. v3.13.27: ScheduleForm loads configured report AI providers dynamically so the AI Provider selector matches Settings keys, including xAI Grok and Groq. v3.14.0: report history list polls with refetchInterval while any row has generation_status === 'pending'; pending rows show a 'Generating…' spinner state; failed rows show a 'Failed' badge; the View action is gated on generation_status === 'complete'. Generate button shows a spinner during the async call and success/error toasts on resolution."
+      "purpose": "Financial goals with progress tracking and trend charts, report schedules, generated report history; goal cards show separate expense and savings-target item counts; 'Manage Items' button opens ExpenseItemsEditor. Report schedule cards now include a pause/resume toggle button (sets ReportSchedule.is_active) so users can suspend delivery without deleting the schedule. v3.13.27: ScheduleForm loads configured report AI providers dynamically so the AI Provider selector matches Settings keys, including xAI Grok and Groq. v3.14.0: report history list polls with refetchInterval while any row has generation_status === 'pending'; pending rows show a 'Generating\u2026' spinner state; failed rows show a 'Failed' badge; the View action is gated on generation_status === 'complete'. Generate button shows a spinner during the async call and success/error toasts on resolution."
     },
     {
       "file": "pages/Admin.tsx",
@@ -208,7 +208,7 @@
       },
       {
         "file": "components/trading/accountValueChartData.ts",
-        "purpose": "Pure data-transform module for AccountValueChart. Exports buildAccountValueSeries(snapshots, activity) which converts raw AccountValueSnapshot rows and daily activity markers into the lightweight-charts line-series format with annotated markers. No React, no side effects — unit-testable in isolation."
+        "purpose": "Pure data-transform module for AccountValueChart. Exports buildAccountValueSeries(snapshots, activity) which converts raw AccountValueSnapshot rows and daily activity markers into the lightweight-charts line-series format with annotated markers. No React, no side effects \u2014 unit-testable in isolation."
       },
       {
         "file": "components/PnLChart.tsx",
@@ -959,7 +959,10 @@
         "BotStats",
         "StrategyParameter",
         "StrategyDefinition",
-        "OrderHistory"
+        "OrderHistory",
+        "StrategyConfig (v3.14.1: strict interface for the open bot-config JSON dict \u2014 known fields typed, [key: string]: unknown tail; used for Bot.strategy_config, BotCreate.strategy_config, bot_config, and position strategy_config_snapshot)",
+        "PerpsSummary (v3.14.1)",
+        "MutationLike<TVars> (v3.14.1: minimal structural type for a React Query mutation passed to a child component as a prop)"
       ],
       "account": [
         "Balances",
@@ -1042,6 +1045,10 @@
     {
       "file": "pages/positions/utils/visualRows.ts",
       "purpose": "buildVisualRows(rows, columns): packs position rows into virtualized 'visual rows' for the deals grid view \u2014 group-header rows span the full width (columns=1), card rows are bundled columns-wide; consumed by Positions.tsx grid mode and VirtualizedPositionList."
+    },
+    {
+      "file": "utils/apiError.ts",
+      "purpose": "Single source of truth for API error handling. getApiErrorMessage(err, fallback) safely extracts err.response?.data?.detail without an any cast; isCanceledRequest(err) detects axios aborts (ERR_CANCELED/ECONNABORTED/CanceledError). Replaced all 33 catch(err: any) sites repo-wide. Added in v3.14.1."
     }
   ]
 }

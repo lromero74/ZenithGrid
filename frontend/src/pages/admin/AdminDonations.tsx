@@ -12,6 +12,7 @@ import {
   donationsApi, type DonationGoal, type DonationRecord,
 } from '../../services/api'
 import { useConfirm } from '../../contexts/ConfirmContext'
+import { getApiErrorMessage } from '../../utils/apiError'
 
 export function AdminDonations() {
   const [goal, setGoal] = useState<DonationGoal | null>(null)
@@ -41,8 +42,8 @@ export function AdminDonations() {
       ])
       setGoal(goalData)
       setDonations(donationData)
-    } catch (err: any) {
-      setError(err.response?.data?.detail || 'Failed to load donations')
+    } catch (err) {
+      setError(getApiErrorMessage(err, 'Failed to load donations'))
     } finally {
       setLoading(false)
     }
@@ -60,8 +61,8 @@ export function AdminDonations() {
     try {
       await donationsApi.confirm(id)
       fetchData()
-    } catch (err: any) {
-      setError(err.response?.data?.detail || 'Failed to confirm')
+    } catch (err) {
+      setError(getApiErrorMessage(err, 'Failed to confirm'))
     }
   }
 
@@ -76,8 +77,8 @@ export function AdminDonations() {
     try {
       await donationsApi.reject(id)
       fetchData()
-    } catch (err: any) {
-      setError(err.response?.data?.detail || 'Failed to reject')
+    } catch (err) {
+      setError(getApiErrorMessage(err, 'Failed to reject'))
     }
   }
 
@@ -88,8 +89,8 @@ export function AdminDonations() {
       await donationsApi.updateGoal(target)
       setEditingGoal(false)
       fetchData()
-    } catch (err: any) {
-      setError(err.response?.data?.detail || 'Failed to update goal')
+    } catch (err) {
+      setError(getApiErrorMessage(err, 'Failed to update goal'))
     }
   }
 
@@ -112,8 +113,8 @@ export function AdminDonations() {
       setAddNotes('')
       setAddRef('')
       fetchData()
-    } catch (err: any) {
-      setError(err.response?.data?.detail || 'Failed to add donation')
+    } catch (err) {
+      setError(getApiErrorMessage(err, 'Failed to add donation'))
     }
   }
 

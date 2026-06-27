@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { X } from 'lucide-react'
 import { api } from '../../services/api'
+import { getApiErrorMessage, isCanceledRequest } from '../../utils/apiError'
 import { DepthChart } from '../trading/DepthChart'
 import { formatPriceForQuote, getQuotePrecision } from './positionUtils'
 
@@ -88,8 +89,8 @@ export function LimitCloseModal({
           signal: controller.signal,
         })
         setProductPrecision(response.data)
-      } catch (err: any) {
-        if (err?.code === 'ERR_CANCELED' || err?.code === 'ECONNABORTED') return
+      } catch (err) {
+        if (isCanceledRequest(err)) return
         console.error('Failed to fetch product precision:', err)
         // Use defaults if fetch fails
         const prec = getQuotePrecision(quoteCurrency)
@@ -115,8 +116,8 @@ export function LimitCloseModal({
           signal: controller.signal,
         })
         setBtcUsdPrice(response.data.price || 0)
-      } catch (err: any) {
-        if (err?.code === 'ERR_CANCELED' || err?.code === 'ECONNABORTED') return
+      } catch (err) {
+        if (isCanceledRequest(err)) return
         console.error('Failed to fetch BTC/USD price:', err)
       }
     }
@@ -135,9 +136,9 @@ export function LimitCloseModal({
         const data = response.data
         setTicker(data)
         // Price initialization is handled by separate useEffect with hasInitializedSlider
-      } catch (err: any) {
-        if (err?.code === 'ERR_CANCELED' || err?.code === 'ECONNABORTED') return
-        setError(err.response?.data?.detail || 'Failed to fetch ticker data')
+      } catch (err) {
+        if (isCanceledRequest(err)) return
+        setError(getApiErrorMessage(err, 'Failed to fetch ticker data'))
       }
     }
 
@@ -343,8 +344,8 @@ export function LimitCloseModal({
       }
       onSuccess()
       onClose()
-    } catch (err: any) {
-      setError(err.response?.data?.detail || `Failed to ${isEditing ? 'update' : 'place'} limit order`)
+    } catch (err) {
+      setError(getApiErrorMessage(err, `Failed to ${isEditing ? 'update' : 'place'} limit order`))
     } finally {
       setIsSubmitting(false)
       setShowLossConfirmation(false)
