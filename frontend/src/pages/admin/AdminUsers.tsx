@@ -15,6 +15,15 @@ import {
 } from '../../services/api'
 import { useConfirm } from '../../contexts/ConfirmContext'
 import { useAuth } from '../../contexts/AuthContext'
+import { getApiErrorMessage } from '../../utils/apiError'
+
+// A user's login session as returned by the admin sessions endpoint.
+interface AdminSession {
+  session_id?: string
+  id?: string
+  ip_address?: string | null
+  created_at?: string | null
+}
 
 export function AdminUsers() {
   const [users, setUsers] = useState<AdminUser[]>([])
@@ -27,7 +36,7 @@ export function AdminUsers() {
   const [sessionUser, setSessionUser] = useState<AdminUser | null>(null)
   const [effectivePolicy, setEffectivePolicy] = useState<SessionPolicyConfig | null>(null)
   const [overridePolicy, setOverridePolicy] = useState<SessionPolicyConfig>({})
-  const [activeSessions, setActiveSessions] = useState<any[]>([])
+  const [activeSessions, setActiveSessions] = useState<AdminSession[]>([])
   const [sessionLoading, setSessionLoading] = useState(false)
   const [showOffline, setShowOffline] = useState(false)
   const confirm = useConfirm()
@@ -41,8 +50,8 @@ export function AdminUsers() {
         friend_id: targetUserId,
       })
       navigate('/chat', { state: { openChannelId: data.id } })
-    } catch (err: any) {
-      setError(err.response?.data?.detail || 'Failed to create admin channel')
+    } catch (err) {
+      setError(getApiErrorMessage(err, 'Failed to create admin channel'))
     }
   }
 
@@ -56,8 +65,8 @@ export function AdminUsers() {
       ])
       setUsers(usersData)
       setGroups(groupsData)
-    } catch (err: any) {
-      setError(err.response?.data?.detail || 'Failed to load users')
+    } catch (err) {
+      setError(getApiErrorMessage(err, 'Failed to load users'))
     } finally {
       setLoading(false)
     }
@@ -90,8 +99,8 @@ export function AdminUsers() {
     try {
       await adminApi.updateUserStatus(user.id, !user.is_active)
       await fetchData()
-    } catch (err: any) {
-      setError(err.response?.data?.detail || `Failed to ${action} user`)
+    } catch (err) {
+      setError(getApiErrorMessage(err, `Failed to ${action} user`))
     }
   }
 
@@ -106,8 +115,8 @@ export function AdminUsers() {
       await adminApi.updateUserGroups(editingUserId, selectedGroupIds)
       setEditingUserId(null)
       await fetchData()
-    } catch (err: any) {
-      setError(err.response?.data?.detail || 'Failed to update groups')
+    } catch (err) {
+      setError(getApiErrorMessage(err, 'Failed to update groups'))
     }
   }
 
@@ -130,11 +139,8 @@ export function AdminUsers() {
       ])
       setEffectivePolicy(policyResp.effective_policy ?? policyResp)
       setActiveSessions(sessionsResp.sessions ?? sessionsResp)
-    } catch (err: any) {
-      setError(
-        err.response?.data?.detail
-          || 'Failed to load session info'
-      )
+    } catch (err) {
+      setError(getApiErrorMessage(err, 'Failed to load session info'))
     } finally {
       setSessionLoading(false)
     }
@@ -158,11 +164,8 @@ export function AdminUsers() {
         )
       setEffectivePolicy(policyResp.effective_policy ?? policyResp)
       await fetchData()
-    } catch (err: any) {
-      setError(
-        err.response?.data?.detail
-          || 'Failed to save session override'
-      )
+    } catch (err) {
+      setError(getApiErrorMessage(err, 'Failed to save session override'))
     }
   }
 
@@ -183,11 +186,8 @@ export function AdminUsers() {
         sessionUser.id
       )
       setActiveSessions(sessionsResp.sessions ?? sessionsResp)
-    } catch (err: any) {
-      setError(
-        err.response?.data?.detail
-          || 'Failed to end session'
-      )
+    } catch (err) {
+      setError(getApiErrorMessage(err, 'Failed to end session'))
     }
   }
 
@@ -649,7 +649,7 @@ export function AdminUsers() {
                     </p>
                   ) : (
                     <div className="space-y-2">
-                      {activeSessions.map((s: any) => (
+                      {activeSessions.map((s: AdminSession) => (
                         <div
                           key={s.session_id || s.id}
                           className="flex items-center justify-between bg-slate-900 rounded p-2 text-xs"
@@ -670,7 +670,7 @@ export function AdminUsers() {
                           <button
                             onClick={() =>
                               handleForceEnd(
-                                s.session_id || s.id
+                                s.session_id || s.id || ''
                               )
                             }
                             className="p-1 text-red-400 hover:text-red-300 hover:bg-slate-700 rounded transition-colors"
