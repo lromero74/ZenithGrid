@@ -108,7 +108,7 @@ export default function TradingChart({ productId = 'ETH-BTC' }: TradingChartProp
     const signalLineData: LineData[] = []
 
     for (let i = slowPeriod - 1; i < candles.length; i++) {
-      const time = candles[i].time as any
+      const time = candles[i].time as Time
       const macdValue = macdLine[i]
       const signalValue = signalLine[i - (slowPeriod - 1)]
 
@@ -163,7 +163,7 @@ export default function TradingChart({ productId = 'ETH-BTC' }: TradingChartProp
       wickUpColor: '#26a69a',
       wickDownColor: '#ef5350',
     })
-    candlestickSeriesRef.current = candlestickSeries as any
+    candlestickSeriesRef.current = candlestickSeries
 
     // Volume series
     const volumeSeries = chart.addHistogramSeries({
@@ -173,7 +173,7 @@ export default function TradingChart({ productId = 'ETH-BTC' }: TradingChartProp
       },
       priceScaleId: 'volume',
     })
-    volumeSeriesRef.current = volumeSeries as any
+    volumeSeriesRef.current = volumeSeries
     chart.priceScale('volume').applyOptions({
       scaleMargins: {
         top: 0.8,
@@ -234,7 +234,7 @@ export default function TradingChart({ productId = 'ETH-BTC' }: TradingChartProp
 
       // Update candlestick data
       const candleData: CandlestickData[] = candles.map(c => ({
-        time: c.time as any,
+        time: c.time as Time,
         open: c.open,
         high: c.high,
         low: c.low,
@@ -245,7 +245,7 @@ export default function TradingChart({ productId = 'ETH-BTC' }: TradingChartProp
       // Update volume data
       if (showVolume) {
         const volumeData: HistogramData[] = candles.map(c => ({
-          time: c.time as any,
+          time: c.time as Time,
           value: c.volume,
           color: c.close >= c.open ? 'rgba(38, 166, 154, 0.4)' : 'rgba(239, 83, 80, 0.4)',
         }))

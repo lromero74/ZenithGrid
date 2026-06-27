@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, useCallback } from 'react'
 import { X, ChevronDown } from 'lucide-react'
 import { calculateSOLevels, getFeeAdjustedProfitMultiplier, getTakeProfitPercent } from '../positions/positionUtils'
+import type { Position } from '../../types'
 
 const TV_EXCHANGE_PREFIX: Record<string, string> = {
   coinbase: 'COINBASE',
@@ -76,12 +77,20 @@ interface TradingViewChartModalProps {
   isOpen: boolean
   onClose: () => void
   symbol: string
-  position?: any
+  position?: Position | null
   exchange?: string
 }
 
+// Minimal shape of the external TradingView widget library (loaded via script tag).
+interface TradingViewWidget {
+  remove?: () => void
+  onChartReady: (cb: () => void) => void
+}
+
 declare global {
-  interface Window { TradingView: any }
+  interface Window {
+    TradingView: { widget: new (config: Record<string, unknown>) => TradingViewWidget }
+  }
 }
 
 export default function TradingViewChartModal({
@@ -92,7 +101,7 @@ export default function TradingViewChartModal({
   exchange,
 }: TradingViewChartModalProps) {
   const containerRef = useRef<HTMLDivElement>(null)
-  const widgetRef = useRef<any>(null)
+  const widgetRef = useRef<TradingViewWidget | null>(null)
   const [isWidgetLoading, setIsWidgetLoading] = useState(false)
 
   // Persisted chart settings

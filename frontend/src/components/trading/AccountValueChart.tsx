@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { createChart, ColorType, IChartApi, Time, LineData, SeriesMarker } from 'lightweight-charts'
+import { createChart, ColorType, IChartApi, ISeriesApi, Time, LineData, SeriesMarker } from 'lightweight-charts'
 import { TrendingUp, DollarSign } from 'lucide-react'
 import { LoadingSpinner } from '../shared/LoadingSpinner'
 import { useAccount } from '../../contexts/AccountContext'
@@ -65,8 +65,8 @@ export function AccountValueChart({ className = '', liveBtcValue, liveUsdValue }
   )
   const chartContainerRef = useRef<HTMLDivElement>(null)
   const chartRef = useRef<IChartApi | null>(null)
-  const btcSeriesRef = useRef<any>(null)
-  const usdSeriesRef = useRef<any>(null)
+  const btcSeriesRef = useRef<ISeriesApi<'Line'> | null>(null)
+  const usdSeriesRef = useRef<ISeriesApi<'Line'> | null>(null)
   // Tracks the last data shape we fit the time-scale to, so we only re-fit on a
   // real history/mode change — not on every live-value tick (which would reset
   // the user's zoom).

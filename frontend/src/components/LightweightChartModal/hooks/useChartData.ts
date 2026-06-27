@@ -1,5 +1,6 @@
 import { useEffect, useState, useRef } from 'react'
 import { Time } from 'lightweight-charts'
+import { isCanceledRequest } from '../../../utils/apiError'
 import { api } from '../../../services/api'
 import type { CandleData } from '../../../utils/indicators/types'
 
@@ -71,7 +72,7 @@ export function useChartData(
         candleDataRef.current = formattedCandles
         setChartData(formattedCandles)
       } catch (error) {
-        if ((error as any)?.code === 'ERR_CANCELED' || (error as any)?.name === 'CanceledError') return
+        if (isCanceledRequest(error)) return
         console.error('Error fetching candles:', error)
       }
     }

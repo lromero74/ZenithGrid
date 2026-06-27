@@ -8,6 +8,7 @@
 
 import { useState, useEffect, useRef } from 'react'
 import { BarChart3, X } from 'lucide-react'
+import { isCanceledRequest } from '../../utils/apiError'
 import { createChart, ColorType } from 'lightweight-charts'
 import type { IChartApi, ISeriesApi, Time } from 'lightweight-charts'
 import { api } from '../../services/api'
@@ -185,7 +186,7 @@ function PortfolioChartModal({ asset, onClose }: PortfolioChartModalProps) {
           }
         }
       } catch (err: unknown) {
-        if ((err as any)?.code === 'ERR_CANCELED' || (err as any)?.name === 'CanceledError') return
+        if (isCanceledRequest(err)) return
         console.error('Error fetching chart data:', err)
         const e = err as { response?: { data?: { detail?: string } } }
         setChartError(e.response?.data?.detail || 'Failed to load chart data')

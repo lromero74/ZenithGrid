@@ -63,13 +63,13 @@ interface OverallStatsPanelProps {
 
 export const OverallStatsPanel = ({ stats, completedStats, realizedPnL, balances, onRefreshBalances }: OverallStatsPanelProps) => {
   const [selectedHistorical, setSelectedHistorical] = useState<'yesterday' | 'last_week' | 'last_month' | 'last_quarter' | 'last_year'>(() => {
-    try { return (localStorage.getItem('zenith-stats-historical') as any) || 'last_week' } catch { return 'last_week' }
+    try { return (localStorage.getItem('zenith-stats-historical') as 'yesterday' | 'last_week' | 'last_month' | 'last_quarter' | 'last_year' | null) || 'last_week' } catch { return 'last_week' }
   })
   const [selectedToDate, setSelectedToDate] = useState<'wtd' | 'mtd' | 'qtd' | 'ytd'>(() => {
-    try { return (localStorage.getItem('zenith-stats-to-date') as any) || 'ytd' } catch { return 'ytd' }
+    try { return (localStorage.getItem('zenith-stats-to-date') as 'wtd' | 'mtd' | 'qtd' | 'ytd' | null) || 'ytd' } catch { return 'ytd' }
   })
   const [selectedCumulative, setSelectedCumulative] = useState<'alltime' | 'net'>(() => {
-    try { return (localStorage.getItem('zenith-stats-cumulative') as any) || 'alltime' } catch { return 'alltime' }
+    try { return (localStorage.getItem('zenith-stats-cumulative') as 'alltime' | 'net' | null) || 'alltime' } catch { return 'alltime' }
   })
 
   useEffect(() => { try { localStorage.setItem('zenith-stats-historical', selectedHistorical) } catch { /* ignored */ } }, [selectedHistorical])
