@@ -419,7 +419,7 @@ export function NotificationProvider({ children }: NotificationProviderProps) {
         connect()
       }, 5000)
     }
-  }, [handleOrderFill, checkForNewVersion])
+  }, [handleOrderFill, checkForNewVersion, addToast])
 
   // Connect on mount (delayed to avoid React StrictMode "closed before established")
   useEffect(() => {

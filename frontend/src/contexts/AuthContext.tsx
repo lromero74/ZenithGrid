@@ -297,6 +297,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
 
     initializeAuth()
+    // Runs once on mount to restore auth from stored tokens; it calls the stable
+    // `logout` only on the token-validation-failure path. `logout` is declared
+    // below, so it can't be a dep here without a forward reference — and re-running
+    // this bootstrap on its identity is not wanted anyway.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [refreshAccessToken])
 
   // Set up automatic token refresh
@@ -321,7 +326,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [tokenExpiry, user, refreshAccessToken])
 
   // Login function — may return MFA challenge instead of tokens
-  const login = async (email: string, password: string): Promise<void> => {
+  const login = useCallback(async (email: string, password: string): Promise<void> => {
     // Include device trust token if available (to skip MFA on trusted devices)
     const deviceTrustToken = localStorage.getItem(STORAGE_KEYS.DEVICE_TRUST_TOKEN)
     const loginBody: Record<string, string> = { email, password }
@@ -387,10 +392,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setShowSessionLimitsPopup(true)
       }
     }
-  }
+  }, [])
 
   // Verify TOTP MFA code to complete login
-  const verifyMFA = async (code: string, rememberDevice = false): Promise<void> => {
+  const verifyMFA = useCallback(async (code: string, rememberDevice = false): Promise<void> => {
     if (!mfaToken) {
       throw new Error('No MFA session active')
     }
@@ -416,7 +421,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     const data: LoginResponse = await response.json()
     _completeMFALogin(data)
-  }
+  }, [mfaToken])
 
   // Helper to complete MFA login from any verification response
   const _completeMFALogin = (data: LoginResponse) => {
@@ -454,7 +459,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }
 
   // Verify MFA email code to complete login
-  const verifyMFAEmailCode = async (code: string, rememberDevice = false): Promise<void> => {
+  const verifyMFAEmailCode = useCallback(async (code: string, rememberDevice = false): Promise<void> => {
     if (!mfaToken) {
       throw new Error('No MFA session active')
     }
@@ -480,10 +485,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     const data: LoginResponse = await response.json()
     _completeMFALogin(data)
-  }
+  }, [mfaToken])
 
   // Verify MFA email link to complete login
-  const verifyMFAEmailLink = async (token: string, rememberDevice = false): Promise<void> => {
+  const verifyMFAEmailLink = useCallback(async (token: string, rememberDevice = false): Promise<void> => {
     const response = await fetch(`${API_BASE}/mfa/verify-email-link`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -504,10 +509,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     const data: LoginResponse = await response.json()
     _completeMFALogin(data)
-  }
+  }, [])
 
   // Resend MFA email during login
-  const resendMFAEmail = async (): Promise<void> => {
+  const resendMFAEmail = useCallback(async (): Promise<void> => {
     if (!mfaToken) {
       throw new Error('No MFA session active')
     }
@@ -526,7 +531,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       } catch { /* non-JSON response */ }
       throw new Error(detail)
     }
-  }
+  }, [mfaToken])
 
   // Cancel MFA (go back to login form)
   const cancelMFA = useCallback(() => {
@@ -538,7 +543,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [])
 
   // Signup function
-  const signup = async (email: string, password: string, displayName?: string): Promise<void> => {
+  const signup = useCallback(async (email: string, password: string, displayName?: string): Promise<void> => {
     const response = await fetch(`${API_BASE}/signup`, {
       method: 'POST',
       headers: {
@@ -569,7 +574,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     setTokenExpiry(expiryTime)
     setUser(data.user)
-  }
+  }, [])
 
   // Logout function
   const logout = useCallback(() => {
@@ -670,7 +675,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [sessionExpiresAt, sessionPolicy, logout])
 
   // Change password function
-  const changePassword = async (currentPassword: string, newPassword: string): Promise<void> => {
+  const changePassword = useCallback(async (currentPassword: string, newPassword: string): Promise<void> => {
     const token = getAccessToken()
     if (!token) {
       throw new Error('Not authenticated')
@@ -696,10 +701,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       } catch { /* non-JSON response */ }
       throw new Error(detail)
     }
-  }
+  }, [getAccessToken])
 
   // Accept terms function - called after user accepts the risk disclaimer
-  const acceptTerms = async (): Promise<void> => {
+  const acceptTerms = useCallback(async (): Promise<void> => {
     const token = getAccessToken()
     if (!token) {
       throw new Error('Not authenticated')
@@ -726,7 +731,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const updatedUser: User = await response.json()
     setUser(updatedUser)
     localStorage.setItem(STORAGE_KEYS.USER, JSON.stringify(updatedUser))
-  }
+  }, [getAccessToken])
 
   // Update user state (e.g., after enabling/disabling MFA in settings)
   const updateUser = useCallback((updatedUser: User) => {

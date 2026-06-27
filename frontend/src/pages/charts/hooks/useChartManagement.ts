@@ -175,6 +175,10 @@ export function useChartManagement(
         chartRef.current.remove()
       }
     }
+    // Mount-only chart bootstrap. syncAllChartsToRange is invoked inside the
+    // time-range subscription but the chart must be created exactly once, not
+    // re-created when that callback's identity changes.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   // Update chart type when changed (waits for the async chart creation)

@@ -67,6 +67,9 @@ export function DepthChart({ productId, limitPrice, breakevenPrice, quoteCurrenc
     // Refresh every 3 seconds
     const interval = setInterval(fetchOrderBook, 3000)
     return () => clearInterval(interval)
+    // Polling is keyed on productId; onOrderBookUpdate is a fire-and-forget
+    // reporter callback whose identity shouldn't restart the poll loop.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [productId])
 
   if (loading) {

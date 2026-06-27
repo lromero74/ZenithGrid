@@ -5,6 +5,11 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v3.14.8] - 2026-06-27
+
+### Changed
+- **More React Hooks dependency cleanup (no behavior change).** Continued working off the hook-dependency lint debt: stabilized the auth context's action functions (login/MFA/signup/password) with `useCallback` so the auth context value no longer churns on every render, and tightened effect dependencies in the bots page, notifications, paper-trading, chart, TTS, and account-summary views. Each fix was derived from the linter's own scope analysis (or documented as an intentional one-time/narrow trigger), and verified behavior-identical by the full 2,792-test suite. The exhaustive-deps warning count is now down to 48 from the original 182; the remainder (a few trading-chart callbacks and the multiplayer game-state triggers) are being finished separately with individual review.
+
 ## [v3.14.7] - 2026-06-27
 
 ### Changed

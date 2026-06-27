@@ -8,7 +8,7 @@
  * - Resetting account to defaults
  */
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect , useCallback} from 'react'
 import { FlaskConical, Plus, Minus, RotateCcw, AlertCircle, CheckCircle2, ChevronDown, ChevronRight } from 'lucide-react'
 import { useAuth } from '../../contexts/AuthContext'
 import { authFetch } from '../../services/api'
@@ -52,11 +52,7 @@ export function PaperTradingManager() {
     try { return localStorage.getItem('zenith-paper-balances-open') !== 'false' } catch { return true }
   })
 
-  useEffect(() => {
-    loadPaperAccount()
-  }, [])
-
-  const loadPaperAccount = async () => {
+  const loadPaperAccount = useCallback(async () => {
     try {
       setLoading(true)
       const token = getAccessToken()
@@ -79,7 +75,11 @@ export function PaperTradingManager() {
     } finally {
       setLoading(false)
     }
-  }
+  }, [getAccessToken])
+
+  useEffect(() => {
+    loadPaperAccount()
+  }, [loadPaperAccount])
 
   const handleDeposit = async () => {
     const depositAmount = parseFloat(amount)
