@@ -22,6 +22,7 @@ import {
   calculateDCAPrices,
   formatSafetyOrderLabel,
 } from './positionUtils'
+import type { Position } from '../../types'
 
 describe('SELL_FEE_RATE', () => {
   test('default is Coinbase rate', () => {
@@ -76,25 +77,25 @@ describe('getTakeProfitPercent', () => {
   test('reads from position snapshot', () => {
     const position = {
       strategy_config_snapshot: { take_profit_percentage: 3.5 },
-    } as any
+    } as unknown as Position
     expect(getTakeProfitPercent(position, null)).toBe(3.5)
   })
 
   test('falls back to min_profit_percentage', () => {
     const position = {
       strategy_config_snapshot: { min_profit_percentage: 1.5 },
-    } as any
+    } as unknown as Position
     expect(getTakeProfitPercent(position, null)).toBe(1.5)
   })
 
   test('falls back to bot config', () => {
-    const position = { strategy_config_snapshot: undefined } as any
+    const position = { strategy_config_snapshot: undefined } as unknown as Position
     const bot = { strategy_config: { take_profit_percentage: 4.0 } }
     expect(getTakeProfitPercent(position, bot)).toBe(4.0)
   })
 
   test('returns 2.0 default when nothing configured', () => {
-    const position = {} as any
+    const position = {} as unknown as Position
     expect(getTakeProfitPercent(position, null)).toBe(2.0)
   })
 })
@@ -205,7 +206,7 @@ const basePosition = {
     max_safety_orders: 3,
     dca_target_reference: 'average_price',
   },
-} as any
+} as unknown as Position
 
 describe('calculateSOLevels', () => {
   test('returns empty array when no strategy_config_snapshot', () => {

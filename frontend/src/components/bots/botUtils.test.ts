@@ -15,6 +15,7 @@ import {
   calculateSoftCeiling,
   getDCAMultiplier,
 } from './botUtils'
+import type { StrategyParameter } from '../../types'
 
 describe('getDefaultFormData', () => {
   test('returns default values', () => {
@@ -122,7 +123,7 @@ describe('convertProductsToTradingPairs', () => {
 
 describe('isParameterVisible', () => {
   test('returns true when no visible_when', () => {
-    const param = { key: 'test', name: 'Test', type: 'number' } as any
+    const param = { key: "test", name: "Test", type: "number" } as unknown as StrategyParameter
     expect(isParameterVisible(param, {})).toBe(true)
   })
 
@@ -132,7 +133,7 @@ describe('isParameterVisible', () => {
       name: 'Test',
       type: 'number',
       visible_when: { mode: 'advanced' },
-    } as any
+    } as unknown as StrategyParameter
     expect(isParameterVisible(param, { mode: 'advanced' })).toBe(true)
   })
 
@@ -142,7 +143,7 @@ describe('isParameterVisible', () => {
       name: 'Test',
       type: 'number',
       visible_when: { mode: 'advanced' },
-    } as any
+    } as unknown as StrategyParameter
     expect(isParameterVisible(param, { mode: 'simple' })).toBe(false)
   })
 
@@ -152,7 +153,7 @@ describe('isParameterVisible', () => {
       name: 'Test',
       type: 'number',
       visible_when: { mode: 'advanced', enabled: true },
-    } as any
+    } as unknown as StrategyParameter
     expect(isParameterVisible(param, { mode: 'advanced', enabled: true })).toBe(true)
     expect(isParameterVisible(param, { mode: 'advanced', enabled: false })).toBe(false)
   })

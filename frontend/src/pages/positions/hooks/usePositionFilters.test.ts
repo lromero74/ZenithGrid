@@ -10,7 +10,7 @@ import { renderHook, act } from '@testing-library/react'
 import { usePositionFilters } from './usePositionFilters'
 import type { Position } from '../../../types'
 
-function makePosition(overrides: Partial<Position & { _cachedPnL?: any }> = {}): Position & { _cachedPnL?: any } {
+function makePosition(overrides: Partial<Position & { _cachedPnL?: unknown }> = {}): Position & { _cachedPnL?: unknown } {
   return {
     id: 1,
     status: 'open',

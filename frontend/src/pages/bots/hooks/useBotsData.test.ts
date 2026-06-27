@@ -84,9 +84,9 @@ describe('useBotsData', () => {
       if (accountId === undefined) return mockBots
       return mockBots.filter(b => b.account_id === accountId)
     })
-    vi.mocked(botsApi.getStrategies).mockResolvedValue(mockStrategies as any)
+    vi.mocked(botsApi.getStrategies).mockResolvedValue(mockStrategies as unknown as Awaited<ReturnType<typeof botsApi.getStrategies>>)
     vi.mocked(templatesApi.getAll).mockResolvedValue(mockTemplates)
-    vi.mocked(accountApi.getAggregateValue).mockResolvedValue({ total_btc: 2.5, total_usd: 150000 } as any)
+    vi.mocked(accountApi.getAggregateValue).mockResolvedValue({ total_btc: 2.5, total_usd: 150000 } as unknown as Awaited<ReturnType<typeof accountApi.getAggregateValue>>)
     vi.mocked(authFetch).mockResolvedValue({
       ok: true,
       json: () => Promise.resolve(mockPortfolio),

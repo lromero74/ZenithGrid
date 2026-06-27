@@ -48,15 +48,15 @@ function createFormData(overrides: Partial<BotFormData> = {}): BotFormData {
   }
 }
 
-function createDefaultProps(overrides: Record<string, any> = {}) {
+function createDefaultProps(overrides: Record<string, unknown> = {}) {
   return {
     showModal: false,
     formData: createFormData(),
     setFormData: vi.fn(),
     editingBot: null as Bot | null,
-    templates: [] as any[],
-    strategies: [] as any[],
-    TRADING_PAIRS: [] as any[],
+    templates: [],
+    strategies: [],
+    TRADING_PAIRS: [],
     validationErrors: [] as ValidationError[],
     selectedAccount: { id: 1, name: 'Test Account' },
     createBot: { mutate: vi.fn() },
@@ -542,7 +542,7 @@ describe('useBotForm', () => {
     })
 
     // max_simultaneous_same_pair should remain unchanged (3 <= effectiveMaxDeals 3)
-    const call = vi.mocked(setFormData).mock.calls[0][0] as any
+    const call = vi.mocked(setFormData).mock.calls[0][0] as BotFormData
     expect(call.strategy_config.max_simultaneous_same_pair).toBe(3)
   })
 

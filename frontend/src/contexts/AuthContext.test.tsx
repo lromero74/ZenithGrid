@@ -350,7 +350,7 @@ describe('AuthContext', () => {
     expect(screen.getByTestId('authenticated').textContent).toBe('false')
     // Fetch should have been called only for the logout fire-and-forget, not for refresh
     const refreshCalls = mockFetch.mock.calls.filter(
-      (call: any[]) => typeof call[0] === 'string' && call[0].includes('/auth/refresh')
+      (call: unknown[]) => typeof call[0] === 'string' && call[0].includes('/auth/refresh')
     )
     expect(refreshCalls).toHaveLength(0)
   })

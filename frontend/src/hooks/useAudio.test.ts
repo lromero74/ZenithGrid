@@ -240,7 +240,7 @@ describe('useAudio', () => {
 
     // Remove AudioContext, provide webkitAudioContext
     vi.stubGlobal('AudioContext', undefined)
-    ;(window as any).webkitAudioContext = MockAudioContext
+    ;(window as unknown as { webkitAudioContext?: unknown }).webkitAudioContext = MockAudioContext
 
     const { result } = renderHook(() => useAudio())
 
@@ -251,6 +251,6 @@ describe('useAudio', () => {
     expect(mockCtx.createOscillator).toHaveBeenCalled()
 
     // Cleanup
-    delete (window as any).webkitAudioContext
+    delete (window as unknown as { webkitAudioContext?: unknown }).webkitAudioContext
   })
 })
