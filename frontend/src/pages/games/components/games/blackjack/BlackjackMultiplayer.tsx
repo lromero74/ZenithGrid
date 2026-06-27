@@ -224,6 +224,9 @@ export function BlackjackMultiplayer({ roomId, players, playerNames = {}, diffic
       })
     }, delay)
     return () => clearTimeout(timer)
+  // Host dealer-draw loop: keyed on dealerHand.length for fresh-state vsDealerStep;
+  // depending on whole gameState would restart the draw timer on every change.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isHost, gameState.phase, gameState.dealerHand.length, broadcastState, sfx])
 
   // ── Game over detection ──────────────────────────────────────────

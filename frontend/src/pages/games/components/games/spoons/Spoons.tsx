@@ -314,6 +314,9 @@ function SpoonsSinglePlayer({ onGameEnd, isMultiplayer }: { onGameEnd?: (result:
       }, delay)
     )
     return () => timers.forEach(clearTimeout)
+  // Sets up AI grab timers once per round/phase; depending on the whole gameState
+  // would re-create the timers on every state change and cause duplicate grabs.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [gameState.phase, gameState.spoonGrabber, gameStatus, sfx, showModeSelect])
 
   // Human grabs spoon

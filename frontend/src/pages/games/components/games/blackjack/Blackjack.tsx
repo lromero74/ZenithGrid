@@ -338,6 +338,9 @@ function BlackjackSinglePlayer({ onGameEnd, onScoreChange, onStateChange: _onSta
       })
     }, delay)
     return () => clearTimeout(timer)
+  // Sequences dealer draws: keyed on dealerHand.length so each card re-runs with
+  // fresh state; depending on whole gameState would restart the timer every change.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [gameState.phase, gameState.dealerHand.length, sfx])
 
   // AI opponents play one step at a time
