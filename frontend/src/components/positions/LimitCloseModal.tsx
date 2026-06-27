@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import { X } from 'lucide-react'
 import { api } from '../../services/api'
 import { getApiErrorMessage, isCanceledRequest } from '../../utils/apiError'
@@ -165,7 +165,7 @@ export function LimitCloseModal({
   }
 
   // Helper function to round price UP to correct increment (for mark price on sells)
-  const roundUpToIncrement = (price: number): number => {
+  const roundUpToIncrement = useCallback((price: number): number => {
     if (!productPrecision) return price
 
     const increment = parseFloat(productPrecision.quote_increment)
@@ -175,11 +175,11 @@ export function LimitCloseModal({
     // Return with proper decimal precision
     const decimals = productPrecision.quote_decimals
     return parseFloat(rounded.toFixed(decimals))
-  }
+  }, [productPrecision])
 
   // Calculate slider parameters based on precision
   // Uses full order book depth range when available
-  const getSliderParams = () => {
+  const getSliderParams = useCallback(() => {
     if (!ticker || !productPrecision) return {
       numSteps: 100,
       increment: 0,
@@ -241,7 +241,7 @@ export function LimitCloseModal({
       askPercent,
       isExtendedRange
     }
-  }
+  }, [limitPrice, orderBookRange, productPrecision, ticker])
 
   // Initialize price ONCE when ticker/precision first loads
   // When editing: use the current limit price from the existing order
@@ -259,7 +259,7 @@ export function LimitCloseModal({
       setLimitPrice(initialPrice)
     }
     hasInitializedSlider.current = true
-  }, [ticker, productPrecision, isEditing, currentLimitPrice])
+  }, [ticker, productPrecision, isEditing, currentLimitPrice, roundUpToIncrement])
 
   // Update slider step to match current price (for visual display)
   // This runs on ticker updates to keep slider position accurate
@@ -272,7 +272,7 @@ export function LimitCloseModal({
     const step = Math.round((limitPrice - rangeStart) / increment)
     // Clamp to valid range
     setSliderStep(Math.max(0, Math.min(numSteps, step)))
-  }, [ticker, productPrecision, limitPrice])
+  }, [ticker, productPrecision, limitPrice, getSliderParams])
 
   // Handle slider change - update price from new step
   const handleSliderChange = (newStep: number) => {

@@ -1,4 +1,4 @@
-import { useRef, useState, useEffect } from 'react'
+import { useRef, useState, useEffect, useCallback } from 'react'
 import { isCanceledRequest } from '../../utils/apiError'
 import { useQuery } from '@tanstack/react-query'
 import { createChart, ColorType, IChartApi, ISeriesApi, SeriesType, SeriesMarker, Time, LineStyle } from 'lightweight-charts'
@@ -366,7 +366,7 @@ export function DealChart({ position, productId: initialProductId, currentPrice,
   }
 
   // Render indicators
-  const renderIndicators = (candles: CandleData[]) => {
+  const renderIndicators = useCallback((candles: CandleData[]) => {
     if (!chartRef.current || !candles.length || isCleanedUpRef.current) return
 
     const isBTCPair = selectedPair.endsWith('-BTC')
@@ -492,7 +492,7 @@ export function DealChart({ position, productId: initialProductId, currentPrice,
         indicatorSeriesRef.current.set(indicator.id, newSeries)
       }
     })
-  }
+  }, [indicators, selectedPair])
 
   // Update chart with data, indicators, and position lines
   useEffect(() => {
@@ -764,7 +764,7 @@ export function DealChart({ position, productId: initialProductId, currentPrice,
     } catch {
       return
     }
-  }, [chartData, chartType, useHeikinAshi, indicators, position, bot, selectedPair, trades])
+  }, [chartData, chartType, useHeikinAshi, indicators, position, bot, selectedPair, trades, renderIndicators])
 
   // Create oscillator indicator charts
   useEffect(() => {
