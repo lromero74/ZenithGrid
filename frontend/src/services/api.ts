@@ -1095,10 +1095,13 @@ export const reportsApi = {
     }).then(r => r.data),
   getReport: (id: number) => api.get<ReportSummary>(`/reports/${id}`).then(r => r.data),
   downloadPdf: (id: number) => api.get(`/reports/${id}/pdf`, { responseType: 'blob' }).then(r => r.data),
+  // Generation is synchronous server-side (AI summary + chart/PDF render) and
+  // routinely runs longer than the 45s axios default; use a 3-minute ceiling so
+  // the client doesn't abort before the backend finishes the report.
   generateReport: (scheduleId: number) =>
-    api.post<ReportSummary>('/reports/generate', { schedule_id: scheduleId }).then(r => r.data),
+    api.post<ReportSummary>('/reports/generate', { schedule_id: scheduleId }, { timeout: 180000 }).then(r => r.data),
   previewReport: (scheduleId: number) =>
-    api.post<ReportSummary>('/reports/preview', { schedule_id: scheduleId }).then(r => r.data),
+    api.post<ReportSummary>('/reports/preview', { schedule_id: scheduleId }, { timeout: 180000 }).then(r => r.data),
   deleteReport: (id: number) =>
     api.delete<{ detail: string }>(`/reports/${id}`).then(r => r.data),
   bulkDeleteReports: (ids: number[]) =>

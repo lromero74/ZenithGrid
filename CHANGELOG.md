@@ -5,6 +5,11 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v3.13.30] - 2026-06-27
+
+### Fixed
+- **"Generate Now" reports no longer silently fail to appear.** Report generation can take up to a minute (AI summary + charts + PDF), which previously outran the app's request timeout — the report was created and emailed on the server, but the on-screen Report History stayed empty as if nothing happened. Generation now waits long enough to finish, the Generate button shows a spinner while it works, and a confirmation jumps you to Report History when it's ready. If generation ever runs unusually long, the history list still refreshes and a notice tells you to check back in a moment.
+
 ## [v3.13.29] - 2026-06-27
 
 ### Changed

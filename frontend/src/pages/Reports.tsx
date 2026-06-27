@@ -3,11 +3,12 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   Target, Calendar, FileText, Plus, Pencil, Trash2, Play, Eye, Download,
   CheckCircle, Clock, AlertCircle, ChevronLeft, ChevronRight, Receipt, Square, CheckSquare, TrendingUp,
-  Pause, PlayCircle
+  Pause, PlayCircle, Loader2
 } from 'lucide-react'
 import { useSearchParams } from 'react-router-dom'
 import { reportsApi } from '../services/api'
 import { useConfirm } from '../contexts/ConfirmContext'
+import { useNotifications } from '../contexts/NotificationContext'
 import { useAccount } from '../contexts/AccountContext'
 import { usePermission } from '../hooks/usePermission'
 import { GoalForm, type GoalFormData } from '../components/reports/GoalForm'
@@ -87,6 +88,7 @@ export default function Reports() {
   const canDeleteReports = canDeleteReportsRaw && !isObserverAccount
 
   const confirm = useConfirm()
+  const { addToast } = useNotifications()
 
   const setActiveTab = (tab: TabId) => {
     setSearchParams({ tab }, { replace: true })
@@ -168,6 +170,19 @@ export default function Reports() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['report-history'] })
       queryClient.invalidateQueries({ queryKey: ['report-schedules'] })
+      addToast({ type: 'success', title: 'Report generated', message: 'Your report is ready in Report History.' })
+      setActiveTab('history')
+    },
+    onError: () => {
+      // Generation can outlast the client/proxy request window even though the
+      // backend finishes and saves the report. Refetch history regardless so a
+      // server-completed report still surfaces, and tell the user where to look.
+      queryClient.invalidateQueries({ queryKey: ['report-history'] })
+      addToast({
+        type: 'error',
+        title: 'Report is taking longer than expected',
+        message: 'It may still be finishing. Check Report History in a moment — if it does not appear, try again.',
+      })
     },
   })
 
@@ -469,10 +484,12 @@ export default function Reports() {
                         if (await confirm({ title: 'Generate Report', message: 'Generate a report now?', confirmLabel: 'Generate' })) generateReport.mutate(schedule.id)
                       }}
                       disabled={generateReport.isPending}
-                      className="p-1.5 text-slate-400 hover:text-emerald-400 transition-colors"
-                      title="Generate Now"
+                      className="p-1.5 text-slate-400 hover:text-emerald-400 transition-colors disabled:opacity-60"
+                      title={generateReport.isPending && generateReport.variables === schedule.id ? 'Generating… (may take up to a minute)' : 'Generate Now'}
                     >
-                      <Play className="w-4 h-4" />
+                      {generateReport.isPending && generateReport.variables === schedule.id
+                        ? <Loader2 className="w-4 h-4 animate-spin" />
+                        : <Play className="w-4 h-4" />}
                     </button>
                   )}
                   {canWriteReports && (
