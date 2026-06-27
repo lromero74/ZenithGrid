@@ -6,7 +6,7 @@
  * SFX volume and mute state are independent from music.
  */
 
-import { useRef, useCallback, useEffect } from 'react'
+import { useRef, useCallback, useEffect, useMemo } from 'react'
 import { SFXEngine } from './sfxEngine'
 import { SFX_CATALOG } from './sfxCatalog'
 import { getGameSFXMap } from './sfxRegistry'
@@ -148,5 +148,8 @@ export function useGameSFX(gameId: string): GameSFXControls {
     }
   }, [])
 
-  return { init, play, playCatalog, startAmbient, stopAmbient, stopAllAmbient, toggleMute, isMuted }
+  return useMemo(
+    () => ({ init, play, playCatalog, startAmbient, stopAmbient, stopAllAmbient, toggleMute, isMuted }),
+    [init, play, playCatalog, startAmbient, stopAmbient, stopAllAmbient, toggleMute, isMuted]
+  )
 }
