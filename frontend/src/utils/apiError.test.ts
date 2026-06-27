@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { getApiErrorMessage } from './apiError'
+import { getApiErrorMessage, isCanceledRequest } from './apiError'
 
 describe('getApiErrorMessage', () => {
   // Happy path: backend-style axios error with a detail string
@@ -32,5 +32,21 @@ describe('getApiErrorMessage', () => {
   it('falls back when detail is not a string', () => {
     const err = { response: { data: { detail: { nested: true } } } }
     expect(getApiErrorMessage(err, 'fallback')).toBe('fallback')
+  })
+})
+
+describe('isCanceledRequest', () => {
+  it('detects axios cancel/abort codes and CanceledError name', () => {
+    expect(isCanceledRequest({ code: 'ERR_CANCELED' })).toBe(true)
+    expect(isCanceledRequest({ code: 'ECONNABORTED' })).toBe(true)
+    expect(isCanceledRequest({ name: 'CanceledError' })).toBe(true)
+  })
+
+  it('returns false for real errors and non-objects', () => {
+    expect(isCanceledRequest({ code: 'ERR_BAD_REQUEST' })).toBe(false)
+    expect(isCanceledRequest(new Error('boom'))).toBe(false)
+    expect(isCanceledRequest(null)).toBe(false)
+    expect(isCanceledRequest(undefined)).toBe(false)
+    expect(isCanceledRequest('string')).toBe(false)
   })
 })

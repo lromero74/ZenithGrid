@@ -12,3 +12,15 @@ export function getApiErrorMessage(err: unknown, fallback: string): string {
   if (typeof detail === 'string' && detail) return detail
   return fallback
 }
+
+/**
+ * True when an error represents an aborted/canceled request (pair switch,
+ * timeout, AbortController) rather than a real failure. Covers axios's
+ * `ERR_CANCELED`/`ECONNABORTED` codes and the `CanceledError` name.
+ */
+export function isCanceledRequest(err: unknown): boolean {
+  const e = err as { code?: string; name?: string } | null | undefined
+  return e?.code === 'ERR_CANCELED'
+    || e?.code === 'ECONNABORTED'
+    || e?.name === 'CanceledError'
+}

@@ -8,6 +8,7 @@ import { useState, useEffect } from 'react'
 import { FolderOpen, Plus, Trash2, Edit2, RefreshCw, X, Clock } from 'lucide-react'
 import { adminApi, AdminGroup, AdminRole, SessionPolicyConfig } from '../../services/api'
 import { useConfirm } from '../../contexts/ConfirmContext'
+import { getApiErrorMessage } from '../../utils/apiError'
 
 export function AdminGroups() {
   const [groups, setGroups] = useState<AdminGroup[]>([])
@@ -32,8 +33,8 @@ export function AdminGroups() {
       ])
       setGroups(groupsData)
       setRoles(rolesData)
-    } catch (err: any) {
-      setError(err.response?.data?.detail || 'Failed to load groups')
+    } catch (err) {
+      setError(getApiErrorMessage(err, 'Failed to load groups'))
     } finally {
       setLoading(false)
     }
@@ -69,11 +70,8 @@ export function AdminGroups() {
       }
       resetForm()
       await fetchData()
-    } catch (err: any) {
-      setError(
-        err.response?.data?.detail
-          || 'Failed to create group'
-      )
+    } catch (err) {
+      setError(getApiErrorMessage(err, 'Failed to create group'))
     }
   }
 
@@ -99,11 +97,8 @@ export function AdminGroups() {
       )
       resetForm()
       await fetchData()
-    } catch (err: any) {
-      setError(
-        err.response?.data?.detail
-          || 'Failed to update group'
-      )
+    } catch (err) {
+      setError(getApiErrorMessage(err, 'Failed to update group'))
     }
   }
 
@@ -119,8 +114,8 @@ export function AdminGroups() {
     try {
       await adminApi.deleteGroup(group.id)
       await fetchData()
-    } catch (err: any) {
-      setError(err.response?.data?.detail || 'Failed to delete group')
+    } catch (err) {
+      setError(getApiErrorMessage(err, 'Failed to delete group'))
     }
   }
 

@@ -9,6 +9,7 @@ import { useState, useEffect, useMemo } from 'react'
 import { ShieldBan, RefreshCw, Globe, Clock, Unlock, ChevronLeft, ChevronRight, BarChart3, PieChart as PieChartIcon, X, AlertTriangle, Search, ChevronsUpDown, ChevronUp, ChevronDown, Layers } from 'lucide-react'
 import { adminApi, type BanSnapshot } from '../../services/api'
 import { useConfirm } from '../../contexts/ConfirmContext'
+import { getApiErrorMessage } from '../../utils/apiError'
 
 const PAGE_SIZE = 10
 
@@ -53,8 +54,8 @@ export function AdminSecurity() {
     setError(null)
     try {
       setData(await adminApi.getBans())
-    } catch (err: any) {
-      setError(err.response?.data?.detail || 'Failed to load ban data')
+    } catch (err) {
+      setError(getApiErrorMessage(err, 'Failed to load ban data'))
     } finally {
       setLoading(false)
     }
@@ -65,8 +66,8 @@ export function AdminSecurity() {
     setError(null)
     try {
       setData(await adminApi.refreshBans())
-    } catch (err: any) {
-      setError(err.response?.data?.detail || 'Failed to refresh ban data')
+    } catch (err) {
+      setError(getApiErrorMessage(err, 'Failed to refresh ban data'))
     } finally {
       setRefreshing(false)
     }
@@ -83,8 +84,8 @@ export function AdminSecurity() {
     try {
       await adminApi.unbanIp(ip)
       setData(await adminApi.getBans())
-    } catch (err: any) {
-      setError(err.response?.data?.detail || 'Failed to unban IP')
+    } catch (err) {
+      setError(getApiErrorMessage(err, 'Failed to unban IP'))
     }
   }
 

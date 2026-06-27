@@ -8,6 +8,7 @@ import { useState, useEffect } from 'react'
 import { KeyRound, Plus, Trash2, Edit2, RefreshCw, X, ShieldCheck } from 'lucide-react'
 import { adminApi, AdminRole, AdminPermission } from '../../services/api'
 import { useConfirm } from '../../contexts/ConfirmContext'
+import { getApiErrorMessage } from '../../utils/apiError'
 
 export function AdminRoles() {
   const [roles, setRoles] = useState<AdminRole[]>([])
@@ -32,8 +33,8 @@ export function AdminRoles() {
       ])
       setRoles(rolesData)
       setPermissions(permsData)
-    } catch (err: any) {
-      setError(err.response?.data?.detail || 'Failed to load roles')
+    } catch (err) {
+      setError(getApiErrorMessage(err, 'Failed to load roles'))
     } finally {
       setLoading(false)
     }
@@ -61,8 +62,8 @@ export function AdminRoles() {
       })
       resetForm()
       await fetchData()
-    } catch (err: any) {
-      setError(err.response?.data?.detail || 'Failed to create role')
+    } catch (err) {
+      setError(getApiErrorMessage(err, 'Failed to create role'))
     }
   }
 
@@ -86,8 +87,8 @@ export function AdminRoles() {
       })
       resetForm()
       await fetchData()
-    } catch (err: any) {
-      setError(err.response?.data?.detail || 'Failed to update role')
+    } catch (err) {
+      setError(getApiErrorMessage(err, 'Failed to update role'))
     }
   }
 
@@ -103,8 +104,8 @@ export function AdminRoles() {
     try {
       await adminApi.deleteRole(role.id)
       await fetchData()
-    } catch (err: any) {
-      setError(err.response?.data?.detail || 'Failed to delete role')
+    } catch (err) {
+      setError(getApiErrorMessage(err, 'Failed to delete role'))
     }
   }
 

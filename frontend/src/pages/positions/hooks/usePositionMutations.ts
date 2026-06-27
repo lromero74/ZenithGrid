@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { positionsApi, api } from '../../../services/api'
 import { useNotifications } from '../../../contexts/NotificationContext'
+import { getApiErrorMessage } from '../../../utils/apiError'
 
 interface UsePositionMutationsProps {
   refetchPositions: () => void
@@ -23,8 +24,8 @@ export const usePositionMutations = ({ refetchPositions }: UsePositionMutationsP
       refetchPositions()
       addToast({ type: 'success', title: 'Position Closed', message: `Profit: ${(result.profit_quote ?? 0).toFixed(8)} (${(result.profit_percentage ?? 0).toFixed(2)}%)` })
       return { success: true }
-    } catch (err: any) {
-      addToast({ type: 'error', title: 'Close Failed', message: err.response?.data?.detail || err.message })
+    } catch (err) {
+      addToast({ type: 'error', title: 'Close Failed', message: getApiErrorMessage(err, err instanceof Error ? err.message : 'Operation failed') })
       return { success: false }
     } finally {
       setIsProcessing(false)
@@ -45,8 +46,8 @@ export const usePositionMutations = ({ refetchPositions }: UsePositionMutationsP
       })
       refetchPositions()
       return { success: true }
-    } catch (err: any) {
-      addToast({ type: 'error', title: 'Save Failed', message: err.response?.data?.detail || err.message })
+    } catch (err) {
+      addToast({ type: 'error', title: 'Save Failed', message: getApiErrorMessage(err, err instanceof Error ? err.message : 'Operation failed') })
       return { success: false }
     } finally {
       setIsProcessing(false)
@@ -58,8 +59,8 @@ export const usePositionMutations = ({ refetchPositions }: UsePositionMutationsP
       await api.post(`/positions/${positionId}/cancel-limit-close`)
       refetchPositions()
       return { success: true }
-    } catch (err: any) {
-      addToast({ type: 'error', title: 'Error', message: err.response?.data?.detail || err.message })
+    } catch (err) {
+      addToast({ type: 'error', title: 'Error', message: getApiErrorMessage(err, err instanceof Error ? err.message : 'Operation failed') })
       return { success: false }
     }
   }
