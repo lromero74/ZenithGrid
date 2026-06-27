@@ -127,7 +127,7 @@ function TicTacToeSinglePlayer({ onGameEnd, onStateChange: _onStateChange }: { o
     }
 
     setIsPlayerTurn(false)
-  }, [board, isPlayerTurn, gameStatus, onGameEnd])
+  }, [board, isPlayerTurn, gameStatus, onGameEnd, music, sfx])
 
   // AI move
   useEffect(() => {
@@ -162,7 +162,7 @@ function TicTacToeSinglePlayer({ onGameEnd, onStateChange: _onStateChange }: { o
     }, 300)
 
     return () => clearTimeout(timer)
-  }, [isPlayerTurn, gameStatus, board, difficulty, onGameEnd])
+  }, [isPlayerTurn, gameStatus, board, difficulty, onGameEnd, sfx])
 
   const handlePlayAgain = useCallback(() => {
     setBoard(createBoard())

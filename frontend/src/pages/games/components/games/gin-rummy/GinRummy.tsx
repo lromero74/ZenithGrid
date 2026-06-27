@@ -238,12 +238,12 @@ function GinRummySinglePlayer({ onGameEnd, onStateChange: _onStateChange, isMult
       onGameEnd?.(result === 'won' ? 'win' : 'loss')
       clear()
     }
-  }, [gameState, clear, onGameEnd])
+  }, [gameState, clear, onGameEnd, sfx])
 
-  const handleDrawPile = useCallback(() => { music.init(); sfx.init(); music.start(); sfx.play('draw'); setGameState(prev => drawFromPile(prev)) }, [])
-  const handleDrawDiscard = useCallback(() => { music.init(); sfx.init(); music.start(); sfx.play('draw'); setGameState(prev => drawFromDiscard(prev)) }, [])
-  const handleDiscard = useCallback((i: number) => { sfx.play('meld'); setGameState(prev => discard(prev, i)) }, [])
-  const handleKnock = useCallback(() => { sfx.play('knock'); setGameState(prev => knock(prev)) }, [])
+  const handleDrawPile = useCallback(() => { music.init(); sfx.init(); music.start(); sfx.play('draw'); setGameState(prev => drawFromPile(prev)) }, [music, sfx])
+  const handleDrawDiscard = useCallback(() => { music.init(); sfx.init(); music.start(); sfx.play('draw'); setGameState(prev => drawFromDiscard(prev)) }, [music, sfx])
+  const handleDiscard = useCallback((i: number) => { sfx.play('meld'); setGameState(prev => discard(prev, i)) }, [sfx])
+  const handleKnock = useCallback(() => { sfx.play('knock'); setGameState(prev => knock(prev)) }, [sfx])
   const handleNewRound = useCallback(() => setGameState(prev => newRound(prev)), [])
 
   const handleNewGame = useCallback(() => {

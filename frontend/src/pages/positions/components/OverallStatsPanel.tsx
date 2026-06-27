@@ -1,5 +1,5 @@
 import { Balances } from '../../../types'
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, useCallback } from 'react'
 
 export interface CompletedStats {
   total_profit_btc: number
@@ -61,6 +61,8 @@ interface OverallStatsPanelProps {
   onRefreshBalances: () => void
 }
 
+const EMPTY_PERIOD: { byQuote: Record<string, number>; usd: number } = { byQuote: {}, usd: 0 }
+
 export const OverallStatsPanel = ({ stats, completedStats, realizedPnL, balances, onRefreshBalances }: OverallStatsPanelProps) => {
   const [selectedHistorical, setSelectedHistorical] = useState<'yesterday' | 'last_week' | 'last_month' | 'last_quarter' | 'last_year'>(() => {
     try { return (localStorage.getItem('zenith-stats-historical') as 'yesterday' | 'last_week' | 'last_month' | 'last_quarter' | 'last_year' | null) || 'last_week' } catch { return 'last_week' }
@@ -76,11 +78,10 @@ export const OverallStatsPanel = ({ stats, completedStats, realizedPnL, balances
   useEffect(() => { try { localStorage.setItem('zenith-stats-to-date', selectedToDate) } catch { /* ignored */ } }, [selectedToDate])
   useEffect(() => { try { localStorage.setItem('zenith-stats-cumulative', selectedCumulative) } catch { /* ignored */ } }, [selectedCumulative])
 
-  const emptyPeriod = { byQuote: {} as Record<string, number>, usd: 0 }
 
   // Get the selected historical period's data
-  const getHistoricalData = () => {
-    if (!realizedPnL) return emptyPeriod
+  const getHistoricalData = useCallback(() => {
+    if (!realizedPnL) return EMPTY_PERIOD
     switch (selectedHistorical) {
       case 'yesterday':
         return { byQuote: realizedPnL.yesterday_profit_by_quote || {}, usd: realizedPnL.yesterday_profit_usd }
@@ -93,11 +94,11 @@ export const OverallStatsPanel = ({ stats, completedStats, realizedPnL, balances
       case 'last_year':
         return { byQuote: realizedPnL.last_year_profit_by_quote || {}, usd: realizedPnL.last_year_profit_usd }
     }
-  }
+  }, [realizedPnL, selectedHistorical])
 
   // Get the selected to-date period's data
-  const getToDateData = () => {
-    if (!realizedPnL) return emptyPeriod
+  const getToDateData = useCallback(() => {
+    if (!realizedPnL) return EMPTY_PERIOD
     switch (selectedToDate) {
       case 'wtd':
         return { byQuote: realizedPnL.wtd_profit_by_quote || {}, usd: realizedPnL.wtd_profit_usd }
@@ -108,11 +109,11 @@ export const OverallStatsPanel = ({ stats, completedStats, realizedPnL, balances
       case 'ytd':
         return { byQuote: realizedPnL.ytd_profit_by_quote || {}, usd: realizedPnL.ytd_profit_usd }
     }
-  }
+  }, [realizedPnL, selectedToDate])
 
   // Get cumulative (all-time or net) data
-  const getCumulativeData = () => {
-    if (!realizedPnL) return emptyPeriod
+  const getCumulativeData = useCallback(() => {
+    if (!realizedPnL) return EMPTY_PERIOD
     const allByQuote = realizedPnL.alltime_profit_by_quote || {}
     const allUsd = realizedPnL.alltime_profit_usd ?? 0
     if (selectedCumulative === 'alltime') {
@@ -124,7 +125,7 @@ export const OverallStatsPanel = ({ stats, completedStats, realizedPnL, balances
       merged[currency] = (merged[currency] || 0) + amount
     }
     return { byQuote: merged, usd: allUsd + stats.uPnLUSD }
-  }
+  }, [realizedPnL, selectedCumulative, stats.uPnLByQuote, stats.uPnLUSD])
 
   // Render per-quote breakdown with independent colors + pipe divider + USD total
   const renderPnLBreakdown = (data: { byQuote: Record<string, number>, usd: number }) => {
@@ -149,9 +150,9 @@ export const OverallStatsPanel = ({ stats, completedStats, realizedPnL, balances
     )
   }
 
-  const historicalData = useMemo(() => getHistoricalData(), [realizedPnL, selectedHistorical])
-  const toDateData = useMemo(() => getToDateData(), [realizedPnL, selectedToDate])
-  const cumulativeData = useMemo(() => getCumulativeData(), [realizedPnL, selectedCumulative, stats.uPnLByQuote, stats.uPnLUSD])
+  const historicalData = useMemo(() => getHistoricalData(), [getHistoricalData])
+  const toDateData = useMemo(() => getToDateData(), [getToDateData])
+  const cumulativeData = useMemo(() => getCumulativeData(), [getCumulativeData])
 
   return (
     <div className="bg-slate-800 rounded-lg border border-slate-700 p-3 sm:p-6 mb-4">

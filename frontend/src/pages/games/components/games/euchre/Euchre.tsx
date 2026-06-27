@@ -237,7 +237,7 @@ function EuchreSinglePlayer({ onGameEnd, onStateChange: _onStateChange, isMultip
   useEffect(() => {
     if (prevTrickLen.current > 0 && gameState.currentTrick.length === 0) sfx.play('trick_won')
     prevTrickLen.current = gameState.currentTrick.length
-  }, [gameState.currentTrick.length])
+  }, [gameState.currentTrick.length, sfx])
 
   // Persist state
   useEffect(() => {
@@ -299,14 +299,14 @@ function EuchreSinglePlayer({ onGameEnd, onStateChange: _onStateChange, isMultip
     sfx.init()
     music.start()
     setGameState(prev => orderUp(prev))
-  }, [])
+  }, [music, sfx])
 
   const handlePass = useCallback(() => {
     music.init()
     sfx.init()
     music.start()
     setGameState(prev => pass(prev))
-  }, [])
+  }, [music, sfx])
 
   const handleNameTrump = useCallback((suit: Suit) => {
     setGameState(prev => nameTrump(prev, suit))
@@ -319,12 +319,12 @@ function EuchreSinglePlayer({ onGameEnd, onStateChange: _onStateChange, isMultip
   const handlePlay = useCallback((i: number) => {
     sfx.play('play')
     setGameState(prev => playCard(prev, i))
-  }, [])
+  }, [sfx])
 
   const handleNextHand = useCallback(() => {
     sfx.play('hand_won')
     setGameState(prev => nextHand(prev))
-  }, [])
+  }, [sfx])
 
   const handleGoAlone = useCallback((alone: boolean) => {
     setGameState(prev => setGoingAlone(prev, alone))

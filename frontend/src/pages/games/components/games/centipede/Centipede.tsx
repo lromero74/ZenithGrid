@@ -601,7 +601,7 @@ export function CentipedeSinglePlayer({ onGameEnd, onStateChange: _onStateChange
 
     draw()
     animFrameRef.current = requestAnimationFrame(tick)
-  }, [draw, saveScore, onGameEnd])
+  }, [draw, saveScore, onGameEnd, sfx])
 
   // -------------------------------------------------------------------------
   // Start / restart
@@ -621,7 +621,7 @@ export function CentipedeSinglePlayer({ onGameEnd, onStateChange: _onStateChange
     lastTimeRef.current = performance.now()
     draw()
     animFrameRef.current = requestAnimationFrame(tick)
-  }, [draw, tick, music])
+  }, [draw, tick, music, sfx])
 
   // Auto-start when countdown finishes (multiplayer sync-start)
   useEffect(() => {

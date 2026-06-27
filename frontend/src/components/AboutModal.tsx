@@ -38,15 +38,6 @@ export function AboutModal({ isOpen, onClose }: AboutModalProps) {
   const [totalVersions, setTotalVersions] = useState(0)
 
   // Reset state when modal opens
-  useEffect(() => {
-    if (isOpen) {
-      setVersions([])
-      setOffset(0)
-      setHasMore(false)
-      fetchChangelog(0, true)
-    }
-  }, [isOpen])
-
   const fetchChangelog = useCallback(async (currentOffset: number, isInitial: boolean = false) => {
     if (isInitial) {
       setLoading(true)
@@ -78,6 +69,15 @@ export function AboutModal({ isOpen, onClose }: AboutModalProps) {
       setLoadingMore(false)
     }
   }, [])
+
+  useEffect(() => {
+    if (isOpen) {
+      setVersions([])
+      setOffset(0)
+      setHasMore(false)
+      fetchChangelog(0, true)
+    }
+  }, [isOpen, fetchChangelog])
 
   const loadMore = () => {
     if (!loadingMore && hasMore) {

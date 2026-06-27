@@ -762,7 +762,7 @@ function DinoRunnerSinglePlayer({ onGameEnd, onStateChange, isMultiplayer, input
     }
 
     rafRef.current = requestAnimationFrame(gameLoop)
-  }, [render, saveScore])
+  }, [render, saveScore, music, sfx])
 
   const restartGame = useCallback(() => {
     const hi = Math.max(bestScore, Math.floor(stateRef.current.highScore))
@@ -811,7 +811,7 @@ function DinoRunnerSinglePlayer({ onGameEnd, onStateChange, isMultiplayer, input
       document.removeEventListener('keydown', handleKeyDown)
       document.removeEventListener('keyup', handleKeyUp)
     }
-  }, [restartGame])
+  }, [restartGame, music, sfx])
 
   // -----------------------------------------------------------------------
   // Touch controls
@@ -890,7 +890,7 @@ function DinoRunnerSinglePlayer({ onGameEnd, onStateChange, isMultiplayer, input
       canvas.removeEventListener('touchmove', handleTouchMove)
       canvas.removeEventListener('touchend', handleTouchEnd)
     }
-  }, [restartGame, isLandscape])
+  }, [restartGame, isLandscape, music, sfx])
 
   // -----------------------------------------------------------------------
   // Auto-start when countdown finishes (multiplayer sync-start)

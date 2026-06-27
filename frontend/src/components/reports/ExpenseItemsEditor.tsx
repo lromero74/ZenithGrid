@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { X, Plus, ArrowUpNarrowWide, ArrowDownNarrowWide, PiggyBank } from 'lucide-react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { reportsApi } from '../../services/api'
@@ -43,7 +43,7 @@ export function ExpenseItemsEditor({ goalId, expensePeriod, currency, onClose, r
     queryKey: ['expense-items', goalId],
     queryFn: () => reportsApi.getExpenseItems(goalId),
   })
-  const items: ExpenseItem[] = expenseData?.items ?? []
+  const items: ExpenseItem[] = useMemo(() => expenseData?.items ?? [], [expenseData])
   const coverageSummary: Record<string, unknown> = expenseData?.coverage_summary ?? {}
 
   // Local ordered list for optimistic drag reorder

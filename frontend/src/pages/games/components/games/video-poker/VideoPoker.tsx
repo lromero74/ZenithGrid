@@ -121,15 +121,15 @@ function VideoPokerSinglePlayer({ onGameEnd, onScoreChange, onStateChange: _onSt
       if (gameState.lastResult.name === 'Royal Flush') sfx.play('jackpot')
       else if (gameState.lastResult.multiplier > 0) sfx.play('win')
     }
-  }, [gameState.phase])
+  }, [gameState.phase, sfx])
 
   const handleBetChange = useCallback((delta: number) => {
     setGameState(prev => setBet(prev, prev.bet + delta))
   }, [])
 
-  const handleDeal = useCallback(() => { music.init(); sfx.init(); music.start(); sfx.play('deal'); setGameState(prev => deal(prev)) }, [])
-  const handleToggle = useCallback((i: number) => { sfx.play('hold'); setGameState(prev => toggleHold(prev, i)) }, [])
-  const handleDraw = useCallback(() => { sfx.play('draw'); setGameState(prev => draw(prev)) }, [])
+  const handleDeal = useCallback(() => { music.init(); sfx.init(); music.start(); sfx.play('deal'); setGameState(prev => deal(prev)) }, [music, sfx])
+  const handleToggle = useCallback((i: number) => { sfx.play('hold'); setGameState(prev => toggleHold(prev, i)) }, [sfx])
+  const handleDraw = useCallback(() => { sfx.play('draw'); setGameState(prev => draw(prev)) }, [sfx])
   const handleNewHand = useCallback(() => setGameState(prev => newHand(prev)), [])
 
   const handleNewGame = useCallback(() => {

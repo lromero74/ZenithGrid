@@ -260,7 +260,7 @@ function BackgammonSinglePlayer({ onGameEnd, onStateChange: _onStateChange }: { 
       dice: [],
       usedDice: [],
     })
-  }, [onGameEnd])
+  }, [onGameEnd, sfx])
 
   // Handle dice roll
   const handleRoll = useCallback(() => {
@@ -288,7 +288,7 @@ function BackgammonSinglePlayer({ onGameEnd, onStateChange: _onStateChange }: { 
     setGameState(newState)
     setSelectedPoint(null)
     setValidMoves([])
-  }, [gameState, gameStatus, finishTurn])
+  }, [gameState, gameStatus, finishTurn, music, sfx])
 
   // Handle point click (select source or destination)
   const handlePointClick = useCallback((point: number | 'bar') => {
@@ -331,7 +331,7 @@ function BackgammonSinglePlayer({ onGameEnd, onStateChange: _onStateChange }: { 
     // Deselect
     setSelectedPoint(null)
     setValidMoves([])
-  }, [gameState, gameStatus, selectedPoint, getAllCurrentMoves, finishTurn])
+  }, [gameState, gameStatus, selectedPoint, getAllCurrentMoves, finishTurn, music, sfx])
 
   // Handle bear-off click
   const handleBearOff = useCallback(() => {

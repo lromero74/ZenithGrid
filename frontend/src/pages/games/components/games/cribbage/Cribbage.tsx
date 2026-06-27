@@ -256,27 +256,27 @@ function CribbageSinglePlayer({ onGameEnd, onStateChange: _onStateChange, isMult
     sfx.init()
     music.start()
     setGameState(prev => toggleCribSelection(prev, idx))
-  }, [])
+  }, [music, sfx])
 
   const handleSubmitCrib = useCallback(() => {
     sfx.play('play')
     setGameState(prev => submitCrib(prev))
-  }, [])
+  }, [sfx])
 
   const handlePlayCard = useCallback((idx: number) => {
     sfx.play('play')
     setGameState(prev => playPegCard(prev, idx))
-  }, [])
+  }, [sfx])
 
   const handleSayGo = useCallback(() => {
     sfx.play('go')
     setGameState(prev => sayGo(prev))
-  }, [])
+  }, [sfx])
 
   const handleContinueScoring = useCallback(() => {
     sfx.play('peg')
     setGameState(prev => continueScoring(prev))
-  }, [])
+  }, [sfx])
 
   const handleNewRound = useCallback(() => {
     setGameState(prev => newRound(prev))

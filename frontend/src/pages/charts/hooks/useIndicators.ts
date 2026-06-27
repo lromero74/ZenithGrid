@@ -540,17 +540,20 @@ export function useIndicators({
 
   // Cleanup indicator charts when component unmounts
   useEffect(() => {
+    // Capture the (stable, mutated-in-place) maps for cleanup.
+    const indicatorCharts = indicatorChartsRef.current
+    const syncCallbacks = syncCallbacksRef.current
     return () => {
-      indicatorChartsRef.current.forEach((chart, id) => {
+      indicatorCharts.forEach((chart, id) => {
         // Unsubscribe from time scale changes
-        const callback = syncCallbacksRef.current.get(id)
+        const callback = syncCallbacks.get(id)
         if (callback) {
           try {
             chart.timeScale().unsubscribeVisibleTimeRangeChange(callback)
           } catch {
             // Already unsubscribed
           }
-          syncCallbacksRef.current.delete(id)
+          syncCallbacks.delete(id)
         }
         // Remove resize handler
         const resizeHandler = (chart as ChartWithResize).__resizeHandler
@@ -563,7 +566,7 @@ export function useIndicators({
           // Chart may have already been removed
         }
       })
-      indicatorChartsRef.current.clear()
+      indicatorCharts.clear()
     }
   }, [indicatorChartsRef, syncCallbacksRef])
 

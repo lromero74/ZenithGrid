@@ -151,6 +151,8 @@ export function useChartManagement(
       setChartReady(true)
     })
 
+    // Capture the (stable, mutated-in-place) callbacks map for cleanup.
+    const syncCallbacks = syncCallbacksRef.current
     return () => {
       disposed = true
       isCleanedUpRef.current = true
@@ -160,7 +162,7 @@ export function useChartManagement(
         resizeObserver = null
       }
       // Unsubscribe main chart from time scale changes
-      const mainCallback = syncCallbacksRef.current.get('main')
+      const mainCallback = syncCallbacks.get('main')
       if (mainCallback && chartRef.current) {
         try {
           chartRef.current.timeScale().unsubscribeVisibleTimeRangeChange(mainCallback)
@@ -168,7 +170,7 @@ export function useChartManagement(
           // Already unsubscribed
         }
       }
-      syncCallbacksRef.current.delete('main')
+      syncCallbacks.delete('main')
       if (chartRef.current) {
         chartRef.current.remove()
       }

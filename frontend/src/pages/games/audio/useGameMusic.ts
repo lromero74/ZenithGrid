@@ -4,7 +4,7 @@
  * Handles lifecycle: init (from user gesture), start, stop, updateParams, cleanup.
  */
 
-import { useRef, useCallback, useEffect } from 'react'
+import { useRef, useCallback, useEffect, useMemo } from 'react'
 import { SynthEngine } from './synthEngine'
 import { Sequencer } from './sequencer'
 import type { Song, GameMusicParams } from './songTypes'
@@ -164,5 +164,8 @@ export function useGameMusic(song: Song): GameMusicControls {
     }
   }, [])
 
-  return { init, start, stop, fadeOut, updateParams, toggleMute, isMuted, isInitialized }
+  return useMemo(
+    () => ({ init, start, stop, fadeOut, updateParams, toggleMute, isMuted, isInitialized }),
+    [init, start, stop, fadeOut, updateParams, toggleMute, isMuted, isInitialized]
+  )
 }

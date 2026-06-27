@@ -131,11 +131,11 @@ function Rummy500SinglePlayer({ onGameEnd, onStateChange: _onStateChange, isMult
       onGameEnd?.(result === 'won' ? 'win' : 'loss')
       clear()
     }
-  }, [gameState, clear, onGameEnd])
+  }, [gameState, clear, onGameEnd, sfx])
 
-  const handleDrawStock = useCallback(() => { music.init(); sfx.init(); music.start(); sfx.play('draw'); setGameState(prev => drawFromStock(prev)) }, [])
-  const handleDrawDiscard = useCallback(() => { music.init(); sfx.init(); music.start(); sfx.play('draw'); setGameState(prev => drawFromDiscard(prev)) }, [])
-  const handleMeld = useCallback(() => { sfx.play('meld'); setGameState(prev => meldCards(prev)) }, [])
+  const handleDrawStock = useCallback(() => { music.init(); sfx.init(); music.start(); sfx.play('draw'); setGameState(prev => drawFromStock(prev)) }, [music, sfx])
+  const handleDrawDiscard = useCallback(() => { music.init(); sfx.init(); music.start(); sfx.play('draw'); setGameState(prev => drawFromDiscard(prev)) }, [music, sfx])
+  const handleMeld = useCallback(() => { sfx.play('meld'); setGameState(prev => meldCards(prev)) }, [sfx])
   const handleNewRound = useCallback(() => setGameState(prev => newRound(prev)), [])
 
   const handleCardClick = useCallback((index: number) => {
@@ -152,7 +152,7 @@ function Rummy500SinglePlayer({ onGameEnd, onStateChange: _onStateChange, isMult
     setLayOffMode(null)
     sfx.play('draw')
     setGameState(prev => discard(prev, index))
-  }, [])
+  }, [sfx])
 
   const handleLayOffStart = useCallback((cardIndex: number) => {
     setLayOffMode(cardIndex)

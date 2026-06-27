@@ -278,7 +278,7 @@ function TexasHoldemSinglePlayer() {
       setGameStatus(humanWon ? 'won' : 'lost')
       clear()
     }
-  }, [gameState, clear])
+  }, [gameState, clear, sfx])
 
   // Auto-run AI turns — 2s delay, shows decision text
   useEffect(() => {
@@ -307,7 +307,7 @@ function TexasHoldemSinglePlayer() {
   // SFX when community cards are revealed
   useEffect(() => {
     if (gameState.community.length > 0) sfx.play('reveal')
-  }, [gameState.community.length])
+  }, [gameState.community.length, sfx])
 
   // Update raise slider min
   useEffect(() => {
@@ -315,15 +315,15 @@ function TexasHoldemSinglePlayer() {
     setRaiseAmount(Math.min(min, gameState.chips[0] + gameState.bets[0]))
   }, [gameState.phase, gameState.currentBet])
 
-  const handleFold = useCallback(() => { music.init(); sfx.init(); music.start(); sfx.play('fold'); setGameState(prev => fold(prev)) }, [])
-  const handleCheck = useCallback(() => { music.init(); sfx.init(); music.start(); setGameState(prev => check(prev)) }, [])
-  const handleCall = useCallback(() => { music.init(); sfx.init(); music.start(); sfx.play('bet'); setGameState(prev => call(prev)) }, [])
+  const handleFold = useCallback(() => { music.init(); sfx.init(); music.start(); sfx.play('fold'); setGameState(prev => fold(prev)) }, [music, sfx])
+  const handleCheck = useCallback(() => { music.init(); sfx.init(); music.start(); setGameState(prev => check(prev)) }, [music, sfx])
+  const handleCall = useCallback(() => { music.init(); sfx.init(); music.start(); sfx.play('bet'); setGameState(prev => call(prev)) }, [music, sfx])
   const handleRaise = useCallback(() => {
     sfx.play('bet')
     setGameState(prev => raiseAction(prev, raiseAmount))
-  }, [raiseAmount])
+  }, [raiseAmount, sfx])
   const handleAllIn = useCallback(() => setGameState(prev => allIn(prev)), [])
-  const handleNextHand = useCallback(() => { sfx.play('deal'); setGameState(prev => nextHand(prev)) }, [])
+  const handleNextHand = useCallback(() => { sfx.play('deal'); setGameState(prev => nextHand(prev)) }, [sfx])
   const handleNewGame = useCallback(() => {
     setGameState(startHand(createTexasHoldemGame(4)))
     setGameStatus('playing')

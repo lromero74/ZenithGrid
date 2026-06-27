@@ -350,7 +350,7 @@ export function useRaceMode(roomId: string, raceType: RaceType, options?: RaceMo
   // List of active player IDs that can be spectated (have sent state recently)
   const spectatablePlayers = useMemo(() => {
     return Object.keys(playerStates).map(Number)
-  }, [playerStates, spectateTarget])
+  }, [playerStates])
 
   /** Page to the next spectate target. */
   const spectateNext = useCallback(() => {

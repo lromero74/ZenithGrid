@@ -221,7 +221,7 @@ function HangmanSinglePlayer({ onGameEnd, onStateChange: _onStateChange, isMulti
     } else {
       sfx.play('wrong')
     }
-  }, [gameStatus, guessedLetters, word, onGameEnd])
+  }, [gameStatus, guessedLetters, word, onGameEnd, music, sfx])
 
   // Physical keyboard support
   useKeyboard((e) => {

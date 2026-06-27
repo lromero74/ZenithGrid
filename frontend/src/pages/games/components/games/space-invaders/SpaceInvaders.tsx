@@ -531,7 +531,7 @@ function SpaceInvadersSinglePlayer({ onGameEnd, onStateChange: _onStateChange, i
 
     draw()
     animFrameRef.current = requestAnimationFrame(tick)
-  }, [draw, saveScore])
+  }, [draw, saveScore, sfx])
 
   // -----------------------------------------------------------------------
   // Start / restart
@@ -556,7 +556,7 @@ function SpaceInvadersSinglePlayer({ onGameEnd, onStateChange: _onStateChange, i
     lastTimeRef.current = performance.now()
     draw()
     animFrameRef.current = requestAnimationFrame(tick)
-  }, [draw, tick, music])
+  }, [draw, tick, music, sfx])
 
   // Auto-start when countdown finishes (multiplayer sync-start)
   useEffect(() => {
@@ -596,7 +596,7 @@ function SpaceInvadersSinglePlayer({ onGameEnd, onStateChange: _onStateChange, i
       document.removeEventListener('keydown', handleKeyDown)
       document.removeEventListener('keyup', handleKeyUp)
     }
-  }, [])
+  }, [sfx])
 
   // -----------------------------------------------------------------------
   // Pointer/touch controls
@@ -627,7 +627,7 @@ function SpaceInvadersSinglePlayer({ onGameEnd, onStateChange: _onStateChange, i
         stateRef.current = firePlayerBullet(stateRef.current)
       }
     }, 250)
-  }, [])
+  }, [sfx])
 
   const handlePointerMove = useCallback((e: React.PointerEvent<HTMLCanvasElement>) => {
     if (!pointerActiveRef.current) return

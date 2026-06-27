@@ -249,7 +249,7 @@ export function MiniPlayer() {
 
   // Subscribe to YouTube iframe events when iframe loads
   useEffect(() => {
-    if (!currentVideo) return
+    if (!currentVideo?.video_id) return
 
     // Function to subscribe to YouTube events
     const subscribeToYouTube = () => {

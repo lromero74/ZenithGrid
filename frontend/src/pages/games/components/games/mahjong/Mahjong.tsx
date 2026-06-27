@@ -236,7 +236,7 @@ function MahjongSinglePlayer({ onGameEnd, onStateChange: _onStateChange, isMulti
       // Select the new tile instead
       setSelectedId(id)
     }
-  }, [game, selectedId, gameStatus, timer, onGameEnd])
+  }, [game, selectedId, gameStatus, timer, onGameEnd, music, sfx])
 
   const handleShuffle = useCallback(() => {
     if (shufflesLeft <= 0) return

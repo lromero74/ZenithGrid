@@ -363,7 +363,7 @@ function CanastaSinglePlayer({ onGameEnd, onStateChange: _onStateChange, isMulti
       onGameEnd?.(won ? 'win' : 'loss')
       clear()
     }
-  }, [gameState, clear, onGameEnd])
+  }, [gameState, clear, onGameEnd, sfx])
 
   // AI auto-play
   useEffect(() => {
@@ -406,7 +406,7 @@ function CanastaSinglePlayer({ onGameEnd, onStateChange: _onStateChange, isMulti
     music.start()
     setGameState(prev => drawFromStock({ ...prev, meldError: undefined }))
     setSelectedCards([])
-  }, [])
+  }, [music, sfx])
 
   const handlePickupPile = useCallback(() => {
     setGameState(prev => pickupDiscardPile(prev, selectedCards))
@@ -435,7 +435,7 @@ function CanastaSinglePlayer({ onGameEnd, onStateChange: _onStateChange, isMulti
 
     setGameState(prev => meldCards(prev, selectedCards))
     setSelectedCards([])
-  }, [selectedCards, gameState])
+  }, [selectedCards, gameState, sfx])
 
   const handleDiscard = useCallback(() => {
     if (selectedCards.length !== 1) return
@@ -447,7 +447,7 @@ function CanastaSinglePlayer({ onGameEnd, onStateChange: _onStateChange, isMulti
     sfx.play('knock')
     setGameState(prev => goOut(prev))
     setSelectedCards([])
-  }, [])
+  }, [sfx])
 
   const handleNextRound = useCallback(() => {
     setGameState(prev => newRound(prev))

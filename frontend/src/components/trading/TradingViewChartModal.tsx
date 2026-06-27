@@ -201,7 +201,7 @@ export default function TradingViewChartModal({
         widgetRef.current = null
       }
     }
-  }, [isOpen, symbol, position, interval, style, studies])
+  }, [isOpen, symbol, position, interval, style, studies, exchange])
 
   const toggleStudy = (id: string) => {
     setPendingStudies(prev =>

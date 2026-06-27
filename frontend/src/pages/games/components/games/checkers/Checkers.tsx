@@ -291,7 +291,7 @@ function CheckersSinglePlayer({ onGameEnd, onStateChange: _onStateChange }: { on
         setValidMoves([])
       }
     }
-  }, [board, gameStatus, isPlayerTurn, selectedPiece, validMoves, getMovesForPiece, onGameEnd])
+  }, [board, gameStatus, isPlayerTurn, selectedPiece, validMoves, getMovesForPiece, onGameEnd, music, sfx])
 
   // AI turn
   useEffect(() => {

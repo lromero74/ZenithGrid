@@ -266,7 +266,7 @@ function MemorySinglePlayer({ onGameEnd, onMove, onStateChange: _onStateChange }
         }, 800)
       }
     }
-  }, [cards, gameStatus, totalFlips, currentDifficulty, onGameEnd, onMove])
+  }, [cards, gameStatus, totalFlips, currentDifficulty, onGameEnd, onMove, music, sfx])
 
   const startNewGame = useCallback((diff?: Difficulty) => {
     const d = diff ?? currentDifficulty

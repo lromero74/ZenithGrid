@@ -5,6 +5,11 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v3.14.7] - 2026-06-27
+
+### Changed
+- **React Hooks dependency cleanup (no behavior change).** Worked off a large chunk of long-standing lint debt: cleared 118 of the app's 182 `react-hooks/exhaustive-deps` warnings (plus an unused-variable warning). The headline fix memoizes the game sound/music hooks (`useGameSFX`/`useGameMusic`) so their controls are stable references — this was the root cause of ~150 warnings across the multiplayer games, where every effect that plays a sound was flagged. Also stabilized several derived values and effect dependencies in the trading stats, charts, and account views, and hoisted a couple of true constants out of render. All verified behavior-identical by the full 2,792-test suite; the remaining hook-dependency warnings (auth context, a few chart/trading callbacks, and intentional game-state triggers) are being worked through separately with individual review.
+
 ## [v3.14.6] - 2026-06-27
 
 ### Changed

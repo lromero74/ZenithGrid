@@ -159,7 +159,7 @@ function SolitaireSinglePlayer({ onGameEnd }: {
       clear()
       onGameEnd?.('win', gameState.moves)
     }
-  }, [gameState, clear, onGameEnd])
+  }, [gameState, clear, onGameEnd, sfx])
 
   // Clear hint when user makes a move (gameState changes)
   useEffect(() => {
@@ -189,7 +189,7 @@ function SolitaireSinglePlayer({ onGameEnd }: {
       }, 300)
       return () => clearTimeout(timer)
     }
-  }, [gameState, gameStatus, autoCompleting])
+  }, [gameState, gameStatus, autoCompleting, sfx])
 
   // ── Push undo ────────────────────────────────────────────────────
 
@@ -239,7 +239,7 @@ function SolitaireSinglePlayer({ onGameEnd }: {
     pushUndo(gameState)
     sfx.play('flip')
     setGameState(drawFromStock(gameState))
-  }, [gameState, gameStatus, autoCompleting, pushUndo])
+  }, [gameState, gameStatus, autoCompleting, pushUndo, sfx])
 
   // ── Handle waste click ───────────────────────────────────────────
 
@@ -247,7 +247,7 @@ function SolitaireSinglePlayer({ onGameEnd }: {
     if (gameStatus !== 'playing' || gameState.waste.length === 0 || autoCompleting) return
     sfx.play('pickup')
     setSelection({ type: 'waste', pileIndex: 0, cardIndex: 0 })
-  }, [gameState, gameStatus, autoCompleting])
+  }, [gameState, gameStatus, autoCompleting, sfx])
 
   const handleWasteDoubleClick = useCallback(() => {
     if (gameStatus !== 'playing' || gameState.waste.length === 0 || autoCompleting) return
@@ -259,7 +259,7 @@ function SolitaireSinglePlayer({ onGameEnd }: {
       setGameState(result)
       setSelection(null)
     }
-  }, [gameState, gameStatus, autoCompleting, tryAutoFoundation, pushUndo])
+  }, [gameState, gameStatus, autoCompleting, tryAutoFoundation, pushUndo, sfx])
 
   // ── Handle foundation click ──────────────────────────────────────
 
@@ -285,7 +285,7 @@ function SolitaireSinglePlayer({ onGameEnd }: {
       setGameState(moveToFoundation(gameState, selection.type, selection.pileIndex, foundationIndex))
     }
     setSelection(null)
-  }, [gameState, gameStatus, selection, autoCompleting, pushUndo])
+  }, [gameState, gameStatus, selection, autoCompleting, pushUndo, sfx])
 
   // ── Handle tableau click ─────────────────────────────────────────
 
@@ -356,7 +356,7 @@ function SolitaireSinglePlayer({ onGameEnd }: {
       // Reselect if clicking a different face-up card
       setSelection({ type: 'tableau', pileIndex, cardIndex })
     }
-  }, [gameState, gameStatus, selection, autoCompleting, pushUndo])
+  }, [gameState, gameStatus, selection, autoCompleting, pushUndo, music, sfx])
 
   const handleTableauDoubleClick = useCallback((pileIndex: number, cardIndex: number) => {
     if (gameStatus !== 'playing' || autoCompleting) return
@@ -373,7 +373,7 @@ function SolitaireSinglePlayer({ onGameEnd }: {
       setGameState(result)
       setSelection(null)
     }
-  }, [gameState, gameStatus, autoCompleting, tryAutoFoundation, pushUndo])
+  }, [gameState, gameStatus, autoCompleting, tryAutoFoundation, pushUndo, sfx])
 
   // ── New game ─────────────────────────────────────────────────────
 

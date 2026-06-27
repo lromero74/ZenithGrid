@@ -1011,7 +1011,7 @@ function LodeRunnerSinglePlayer({ onGameEnd, onStateChange, isMultiplayer }: { o
     draw()
     onStateChange?.(gsRef.current, 200)
     animFrameRef.current = requestAnimationFrame(tick)
-  }, [draw, saveScore, saveState, clearSaved, onStateChange])
+  }, [draw, saveScore, saveState, clearSaved, onStateChange, sfx])
 
   // -------------------------------------------------------------------------
   // Start / restart

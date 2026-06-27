@@ -6,7 +6,7 @@
  * SFX volume and mute state are independent from music.
  */
 
-import { useRef, useCallback, useEffect } from 'react'
+import { useRef, useCallback, useEffect, useMemo } from 'react'
 import { SFXEngine } from './sfxEngine'
 import { SFX_CATALOG } from './sfxCatalog'
 import { getGameSFXMap } from './sfxRegistry'
@@ -133,12 +133,14 @@ export function useGameSFX(gameId: string): GameSFXControls {
 
   // Cleanup on unmount
   useEffect(() => {
+    // Capture the (stable, mutated-in-place) ambient-loop map for cleanup.
+    const ambient = ambientRef.current
     return () => {
       // Stop all ambient loops
-      for (const interval of ambientRef.current.values()) {
+      for (const interval of ambient.values()) {
         clearInterval(interval)
       }
-      ambientRef.current.clear()
+      ambient.clear()
       // Dispose engine
       engineRef.current?.dispose()
       engineRef.current = null
@@ -146,5 +148,8 @@ export function useGameSFX(gameId: string): GameSFXControls {
     }
   }, [])
 
-  return { init, play, playCatalog, startAmbient, stopAmbient, stopAllAmbient, toggleMute, isMuted }
+  return useMemo(
+    () => ({ init, play, playCatalog, startAmbient, stopAmbient, stopAllAmbient, toggleMute, isMuted }),
+    [init, play, playCatalog, startAmbient, stopAmbient, stopAllAmbient, toggleMute, isMuted]
+  )
 }

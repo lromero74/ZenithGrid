@@ -115,7 +115,7 @@ function SpadesSinglePlayer({ onGameEnd, onStateChange: _onStateChange, isMultip
   useEffect(() => {
     if (prevTrickLen.current > 0 && gameState.currentTrick.length === 0) sfx.play('trick_won')
     prevTrickLen.current = gameState.currentTrick.length
-  }, [gameState.currentTrick.length])
+  }, [gameState.currentTrick.length, sfx])
 
   useEffect(() => {
     if (gameStatus !== 'won' && gameStatus !== 'lost') {
@@ -138,17 +138,17 @@ function SpadesSinglePlayer({ onGameEnd, onStateChange: _onStateChange, isMultip
     music.start()
     setGameState(prev => placeBid(prev, selectedBid, blindNil))
     setBlindNil(false)
-  }, [selectedBid, blindNil])
+  }, [selectedBid, blindNil, music, sfx])
 
   const handlePlay = useCallback((i: number) => {
     sfx.play('play')
     setGameState(prev => playCard(prev, i))
-  }, [])
+  }, [sfx])
 
   const handleNextRound = useCallback(() => {
     sfx.play('hand_won')
     setGameState(prev => nextRound(prev))
-  }, [])
+  }, [sfx])
 
   const handleNewGame = useCallback(() => {
     setGameState(createSpadesGame())
