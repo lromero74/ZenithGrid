@@ -161,7 +161,7 @@ function NonogramSinglePlayer({ onGameEnd }: { onGameEnd?: (result: 'win' | 'los
       timer.stop()
       onGameEnd?.('win')
     }
-  }, [grid, gameStatus, clues, timer, onGameEnd])
+  }, [grid, gameStatus, clues, timer, onGameEnd, music, sfx])
 
   const handleCellRightClick = useCallback((r: number, c: number) => {
     if (gameStatus !== 'playing') return
@@ -171,7 +171,7 @@ function NonogramSinglePlayer({ onGameEnd }: { onGameEnd?: (result: 'win' | 'los
     const next: CellState = current === 'unknown' ? 'empty' : current === 'empty' ? 'unknown' : 'unknown'
     if (next === 'empty') { sfx.play('mark') }
     setGrid(setCell(grid, r, c, next))
-  }, [grid, gameStatus, timer])
+  }, [grid, gameStatus, timer, sfx])
 
   const handleReset = useCallback(() => {
     setGrid(createGrid(rows, cols))

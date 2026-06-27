@@ -186,7 +186,7 @@ function WordleSinglePlayer({ onGameEnd, onStateChange: _onStateChange, isMultip
       sfx.play('key')
       setCurrentGuess(g => g + key)
     }
-  }, [gameStatus, currentGuess, guesses, evaluations, answer, hardMode, showToast, triggerShake])
+  }, [gameStatus, currentGuess, guesses, evaluations, answer, hardMode, showToast, triggerShake, music, sfx])
 
   // Physical keyboard
   useEffect(() => {

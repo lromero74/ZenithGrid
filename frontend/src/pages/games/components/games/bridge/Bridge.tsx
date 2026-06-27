@@ -271,7 +271,7 @@ function BridgeSinglePlayer({ onGameEnd, onStateChange: _onStateChange, isMultip
   useEffect(() => {
     if (prevTrickLen.current > 0 && gameState.currentTrick.length === 0) sfx.play('trick_won')
     prevTrickLen.current = gameState.currentTrick.length
-  }, [gameState.currentTrick.length])
+  }, [gameState.currentTrick.length, sfx])
 
   // Persist state
   useEffect(() => {
@@ -295,7 +295,7 @@ function BridgeSinglePlayer({ onGameEnd, onStateChange: _onStateChange, isMultip
     sfx.init()
     music.start()
     setGameState(prev => makeBid(prev, selectedLevel, selectedStrain))
-  }, [selectedLevel, selectedStrain])
+  }, [selectedLevel, selectedStrain, music, sfx])
 
   const handlePass = useCallback(() => {
     setGameState(prev => passBid(prev))
@@ -304,14 +304,14 @@ function BridgeSinglePlayer({ onGameEnd, onStateChange: _onStateChange, isMultip
   const handlePlay = useCallback((playerIdx: number, cardIndex: number) => {
     sfx.play('play')
     setGameState(prev => playCard(prev, playerIdx, cardIndex))
-  }, [])
+  }, [sfx])
 
   const handleNextHand = useCallback(() => {
     sfx.play('hand_won')
     setGameState(prev => nextHand(prev))
     setSelectedLevel(1)
     setSelectedStrain('clubs')
-  }, [])
+  }, [sfx])
 
   const handleNewGame = useCallback(() => {
     setGameState(createBridgeGame())

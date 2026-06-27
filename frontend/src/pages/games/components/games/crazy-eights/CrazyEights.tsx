@@ -207,7 +207,7 @@ function CrazyEightsSinglePlayer({ onGameEnd, onStateChange: _onStateChange, isM
       onGameEnd?.(humanWon ? 'win' : 'loss')
       clear()
     }
-  }, [gameState, clear])
+  }, [gameState, clear, sfx])
 
   const handlePlay = useCallback((cardIdx: number) => {
     music.init()
@@ -215,7 +215,7 @@ function CrazyEightsSinglePlayer({ onGameEnd, onStateChange: _onStateChange, isM
     music.start()
     sfx.play('play')
     setGameState(prev => playCard(prev, cardIdx))
-  }, [])
+  }, [music, sfx])
 
   const handleDraw = useCallback(() => {
     music.init()
@@ -223,7 +223,7 @@ function CrazyEightsSinglePlayer({ onGameEnd, onStateChange: _onStateChange, isM
     music.start()
     sfx.play('draw')
     setGameState(prev => drawCard(prev))
-  }, [])
+  }, [music, sfx])
 
   const handleChooseSuit = useCallback((suit: Suit) => {
     setGameState(prev => chooseSuit(prev, suit))

@@ -169,7 +169,7 @@ function SnakeSinglePlayer({ onGameEnd, onScoreChange, onStateChange: _onStateCh
     saveScore('snake', scoreRef.current)
     sfx.play('die')
     onGameEnd?.(scoreRef.current)
-  }, [saveScore, onGameEnd])
+  }, [saveScore, onGameEnd, sfx])
 
   const tick = useCallback(() => {
     if (gameStatusRef.current !== 'playing') return
@@ -203,7 +203,7 @@ function SnakeSinglePlayer({ onGameEnd, onScoreChange, onStateChange: _onStateCh
 
     draw()
     gameLoopRef.current = setTimeout(tick, getSpeed(scoreRef.current))
-  }, [wallsMode, draw, gameOver, onScoreChange])
+  }, [wallsMode, draw, gameOver, onScoreChange, sfx])
 
   const startGame = useCallback(() => {
     snakeRef.current = [...INITIAL_SNAKE.map(p => ({ ...p }))]
@@ -219,7 +219,7 @@ function SnakeSinglePlayer({ onGameEnd, onScoreChange, onStateChange: _onStateCh
     music.start()
     draw()
     gameLoopRef.current = setTimeout(tick, getSpeed(0))
-  }, [draw, tick, music])
+  }, [draw, tick, music, sfx])
 
   const pausedRef = useRef(false)
 

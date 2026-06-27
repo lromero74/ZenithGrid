@@ -250,7 +250,7 @@ function FreecellSinglePlayer({ onGameEnd }: {
       clear()
       onGameEnd?.('win', gameState.moves)
     }
-  }, [gameState, clear, onGameEnd])
+  }, [gameState, clear, onGameEnd, sfx])
 
   useEffect(() => { setActiveHint(null) }, [gameState])
 
@@ -310,7 +310,7 @@ function FreecellSinglePlayer({ onGameEnd }: {
       sfx.play('pickup')
       setSelection({ type: 'freecell', colOrCell: cellIdx })
     }
-  }, [gameState, gameStatus, selection, pushUndo])
+  }, [gameState, gameStatus, selection, pushUndo, sfx])
 
   // Click on a foundation slot
   const handleFoundationClick = useCallback((fIdx: number) => {
@@ -332,7 +332,7 @@ function FreecellSinglePlayer({ onGameEnd }: {
       }
     }
     setSelection(null)
-  }, [gameState, gameStatus, selection, pushUndo])
+  }, [gameState, gameStatus, selection, pushUndo, sfx])
 
   // Click on tableau column/card
   const handleTableauClick = useCallback((colIdx: number, cardIdx?: number) => {
@@ -379,7 +379,7 @@ function FreecellSinglePlayer({ onGameEnd }: {
       sfx.play('pickup')
       setSelection({ type: 'tableau', colOrCell: colIdx, cardIndex: cardIdx })
     }
-  }, [gameState, gameStatus, selection, pushUndo])
+  }, [gameState, gameStatus, selection, pushUndo, music, sfx])
 
   // Double-click on tableau card → try foundation
   const handleTableauDoubleClick = useCallback((colIdx: number) => {
@@ -391,7 +391,7 @@ function FreecellSinglePlayer({ onGameEnd }: {
       setGameState(result)
       setSelection(null)
     }
-  }, [gameState, gameStatus, pushUndo])
+  }, [gameState, gameStatus, pushUndo, sfx])
 
   const isSelected = useCallback((type: 'tableau' | 'freecell', colOrCell: number, cardIdx?: number) => {
     if (!selection || selection.type !== type || selection.colOrCell !== colOrCell) return false

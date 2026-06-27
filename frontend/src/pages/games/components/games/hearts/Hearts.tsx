@@ -209,7 +209,7 @@ function HeartsSinglePlayer({ onGameEnd, onStateChange: _onStateChange, isMultip
   useEffect(() => {
     if (prevTrickLen.current > 0 && gameState.currentTrick.length === 0) sfx.play('trick_won')
     prevTrickLen.current = gameState.currentTrick.length
-  }, [gameState.currentTrick.length])
+  }, [gameState.currentTrick.length, sfx])
 
   useEffect(() => {
     if (gameStatus !== 'won' && gameStatus !== 'lost') {
@@ -233,22 +233,22 @@ function HeartsSinglePlayer({ onGameEnd, onStateChange: _onStateChange, isMultip
     sfx.init()
     music.start()
     setGameState(prev => togglePassCard(prev, i))
-  }, [])
+  }, [music, sfx])
 
   const handleConfirmPass = useCallback(() => {
     sfx.play('play')
     setGameState(prev => confirmPass(prev))
-  }, [])
+  }, [sfx])
 
   const handlePlay = useCallback((i: number) => {
     sfx.play('play')
     setGameState(prev => playCard(prev, i))
-  }, [])
+  }, [sfx])
 
   const handleNextRound = useCallback(() => {
     sfx.play('hand_won')
     setGameState(prev => nextRound(prev))
-  }, [])
+  }, [sfx])
 
   const handleNewGame = useCallback(() => {
     setGameState(createHeartsGame())

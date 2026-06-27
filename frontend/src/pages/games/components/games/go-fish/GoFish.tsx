@@ -217,7 +217,7 @@ function GoFishSinglePlayer({ onGameEnd, onStateChange: _onStateChange, isMultip
       onGameEnd?.(tied ? 'draw' : humanWon ? 'win' : 'loss')
       clear()
     }
-  }, [gameState, clear])
+  }, [gameState, clear, sfx])
 
   // Auto-run AI turn
   useEffect(() => {
@@ -235,12 +235,12 @@ function GoFishSinglePlayer({ onGameEnd, onStateChange: _onStateChange, isMultip
     music.start()
     sfx.play('play')
     setGameState(prev => askForRank(prev, rank))
-  }, [])
+  }, [music, sfx])
 
   const handleGoFish = useCallback(() => {
     sfx.play('draw')
     setGameState(prev => goFish(prev))
-  }, [])
+  }, [sfx])
 
   const handleNewGame = useCallback(() => {
     setGameState(createGoFishGame())

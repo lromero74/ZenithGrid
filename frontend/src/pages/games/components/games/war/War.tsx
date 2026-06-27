@@ -132,7 +132,7 @@ function WarSinglePlayer({ onGameEnd, onStateChange: _onStateChange, isMultiplay
       }, 1000)
       return () => clearTimeout(timer)
     }
-  }, [gameState.phase])
+  }, [gameState.phase, sfx])
 
   // Auto-play: auto-flip when in ready phase
   useEffect(() => {
@@ -152,7 +152,7 @@ function WarSinglePlayer({ onGameEnd, onStateChange: _onStateChange, isMultiplay
     music.start()
     sfx.play('flip')
     setGameState(prev => flipCards(prev))
-  }, [])
+  }, [music, sfx])
 
   const handleNewGame = useCallback(() => {
     setGameState(createWarGame())

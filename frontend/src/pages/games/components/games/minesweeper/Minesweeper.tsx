@@ -190,14 +190,14 @@ function MinesweeperSinglePlayer({ onGameEnd, onStateChange: _onStateChange, isM
       }
       onGameEnd?.('win', timer.seconds)
     }
-  }, [board, gameStatus, diff, diffKey, timer, getHighScore, saveScore, onGameEnd])
+  }, [board, gameStatus, diff, diffKey, timer, getHighScore, saveScore, onGameEnd, music, sfx])
 
   const handleFlag = useCallback((row: number, col: number) => {
     if (!board || gameStatus !== 'playing' && gameStatus !== 'idle') return
     if (firstClick.current) return // Can't flag before first reveal
     sfx.play('flag')
     setBoard(toggleFlag(board, row, col))
-  }, [board, gameStatus])
+  }, [board, gameStatus, sfx])
 
   const handleNewGame = useCallback(() => {
     setBoard(null)

@@ -152,7 +152,7 @@ function SudokuSinglePlayer({ onGameEnd, onStateChange: _onStateChange }: { onGa
     music.start()
     if (!timer.isRunning) timer.start()
     setSelected([r, c])
-  }, [gameStatus, timer, music])
+  }, [gameStatus, timer, music, sfx])
 
   const handleDigit = useCallback((num: number) => {
     if (!selected || gameStatus !== 'playing') return
@@ -191,7 +191,7 @@ function SudokuSinglePlayer({ onGameEnd, onStateChange: _onStateChange }: { onGa
       timer.stop()
       onGameEnd?.('win', timer.seconds)
     }
-  }, [selected, gameStatus, notesMode, board, puzzleState.given, checkWin, timer, onGameEnd])
+  }, [selected, gameStatus, notesMode, board, puzzleState.given, checkWin, timer, onGameEnd, sfx])
 
   const handleErase = useCallback(() => {
     if (!selected || gameStatus !== 'playing') return

@@ -261,7 +261,7 @@ function ChessSinglePlayer({ onGameEnd, onStateChange: _onStateChange }: { onGam
       return true
     }
     return false
-  }, [onGameEnd])
+  }, [onGameEnd, sfx])
 
   const handleSquareClick = useCallback((r: number, c: number) => {
     if (gameStatus !== 'playing' || !isPlayerTurn || aiThinking.current) return
@@ -310,7 +310,7 @@ function ChessSinglePlayer({ onGameEnd, onStateChange: _onStateChange }: { onGam
         setValidMoves([])
       }
     }
-  }, [chessState, gameStatus, isPlayerTurn, selectedSquare, validMoves, checkGameEnd])
+  }, [chessState, gameStatus, isPlayerTurn, selectedSquare, validMoves, checkGameEnd, music, sfx])
 
   const handlePromotion = useCallback((pieceType: PieceType) => {
     if (!promotionMove) return
@@ -326,7 +326,7 @@ function ChessSinglePlayer({ onGameEnd, onStateChange: _onStateChange }: { onGam
     if (!checkGameEnd(newState)) {
       setIsPlayerTurn(false)
     }
-  }, [chessState, promotionMove, checkGameEnd])
+  }, [chessState, promotionMove, checkGameEnd, sfx])
 
   // AI turn
   useEffect(() => {
@@ -364,7 +364,7 @@ function ChessSinglePlayer({ onGameEnd, onStateChange: _onStateChange }: { onGam
     }, 300)
 
     return () => clearTimeout(timer)
-  }, [isPlayerTurn, gameStatus, chessState, difficulty, checkGameEnd])
+  }, [isPlayerTurn, gameStatus, chessState, difficulty, checkGameEnd, sfx])
 
   const handleNewGame = useCallback(() => {
     setChessState(createBoard())

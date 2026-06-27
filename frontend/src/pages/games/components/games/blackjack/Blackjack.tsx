@@ -324,7 +324,7 @@ function BlackjackSinglePlayer({ onGameEnd, onScoreChange, onStateChange: _onSta
       else if (gameState.message.toLowerCase().includes('bust')) sfx.play('bust')
       onScoreChange?.(gameState.chips)
     }
-  }, [gameState.phase])
+  }, [gameState.phase, sfx])
 
   // Dealer draws one card at a time
   useEffect(() => {
@@ -338,7 +338,7 @@ function BlackjackSinglePlayer({ onGameEnd, onScoreChange, onStateChange: _onSta
       })
     }, delay)
     return () => clearTimeout(timer)
-  }, [gameState.phase, gameState.dealerHand.length])
+  }, [gameState.phase, gameState.dealerHand.length, sfx])
 
   // AI opponents play one step at a time
   useEffect(() => {
@@ -376,9 +376,9 @@ function BlackjackSinglePlayer({ onGameEnd, onScoreChange, onStateChange: _onSta
       return next
     })
     sfx.play('deal')
-  }, [selectedBet])
+  }, [selectedBet, music, sfx])
 
-  const handleHit = useCallback(() => { sfx.play('hit'); setGameState(prev => hit(prev)) }, [])
+  const handleHit = useCallback(() => { sfx.play('hit'); setGameState(prev => hit(prev)) }, [sfx])
   const handleStand = useCallback(() => setGameState(prev => stand(prev)), [])
   const handleDouble = useCallback(() => setGameState(prev => doubleDown(prev)), [])
   const handleSplit = useCallback(() => setGameState(prev => split(prev)), [])

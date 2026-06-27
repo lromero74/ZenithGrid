@@ -130,7 +130,7 @@ function TwentyFortyEightSinglePlayer({ onGameEnd, onScoreUpdate, isMultiplayer 
       saveScore('2048', newScore)
       onGameEnd?.('loss', newScore)
     }
-  }, [board, score, gameStatus, hasWon, saveScore, onGameEnd, onScoreUpdate])
+  }, [board, score, gameStatus, hasWon, saveScore, onGameEnd, onScoreUpdate, music, sfx])
 
   const handleContinue = useCallback(() => {
     setGameStatus('playing')

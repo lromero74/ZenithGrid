@@ -141,7 +141,7 @@ function UltimateTicTacToeSinglePlayer({ onGameEnd, onStateChange: _onStateChang
       activeBoard: result.nextActiveBoard,
       currentPlayer: 'O',
     })
-  }, [state, gameStatus, onGameEnd])
+  }, [state, gameStatus, onGameEnd, music, sfx])
 
   // AI turn
   useEffect(() => {

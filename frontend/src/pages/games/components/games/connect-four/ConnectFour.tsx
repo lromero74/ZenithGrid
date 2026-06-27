@@ -216,7 +216,7 @@ function ConnectFourSinglePlayer({ onGameEnd, onStateChange: _onStateChange }: {
       return
     }
     setCurrentPlayer('yellow')
-  }, [board, gameStatus, currentPlayer, onGameEnd])
+  }, [board, gameStatus, currentPlayer, onGameEnd, music, sfx])
 
   // AI turn
   useEffect(() => {
@@ -248,7 +248,7 @@ function ConnectFourSinglePlayer({ onGameEnd, onStateChange: _onStateChange }: {
     }, difficulty === 'easy' ? 400 : difficulty === 'medium' ? 700 : 1000)
 
     return () => clearTimeout(timer)
-  }, [currentPlayer, gameStatus, board, difficulty])
+  }, [currentPlayer, gameStatus, board, difficulty, sfx])
 
   const handleNewGame = useCallback(() => {
     setBoard(createBoard())

@@ -418,7 +418,7 @@ function ShalasSinglePlayer() {
     setSelectedBlindCard(prev =>
       prev?.source === 'stackRow' && prev.stackIndex === stackIndex ? null : { source: 'stackRow', stackIndex }
     )
-  }, [gameState, activeSource])
+  }, [gameState, activeSource, sfx])
 
   const handleSecondRowClick = useCallback((index: number) => {
     if (gameState.phase === 'choose_selector') {
