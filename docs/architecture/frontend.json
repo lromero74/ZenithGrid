@@ -48,7 +48,7 @@
     {
       "file": "pages/Reports.tsx",
       "route": "/reports",
-      "purpose": "Financial goals with progress tracking and trend charts, report schedules, generated report history; goal cards show separate expense and savings-target item counts; 'Manage Items' button opens ExpenseItemsEditor. Report schedule cards now include a pause/resume toggle button (sets ReportSchedule.is_active) so users can suspend delivery without deleting the schedule. v3.13.27: ScheduleForm loads configured report AI providers dynamically so the AI Provider selector matches Settings keys, including xAI Grok and Groq."
+      "purpose": "Financial goals with progress tracking and trend charts, report schedules, generated report history; goal cards show separate expense and savings-target item counts; 'Manage Items' button opens ExpenseItemsEditor. Report schedule cards now include a pause/resume toggle button (sets ReportSchedule.is_active) so users can suspend delivery without deleting the schedule. v3.13.27: ScheduleForm loads configured report AI providers dynamically so the AI Provider selector matches Settings keys, including xAI Grok and Groq. v3.14.0: report history list polls with refetchInterval while any row has generation_status === 'pending'; pending rows show a 'Generating…' spinner state; failed rows show a 'Failed' badge; the View action is gated on generation_status === 'complete'. Generate button shows a spinner during the async call and success/error toasts on resolution."
     },
     {
       "file": "pages/Admin.tsx",
@@ -889,7 +889,7 @@
       },
       {
         "name": "reportsApi",
-        "purpose": "Goals CRUD, goal trend data, report schedules, generated reports; v3.13.27 adds getReportAIProviders() for GET /reports/ai-providers so schedule forms can show current-user configured AI providers"
+        "purpose": "Goals CRUD, goal trend data, report schedules, generated reports; v3.13.27 adds getReportAIProviders() for GET /reports/ai-providers so schedule forms can show current-user configured AI providers. v3.14.0: generateReport uses the default (fast) axios timeout since the endpoint returns immediately with a pending row; previewReport retains its 180s timeout."
       },
       {
         "name": "speculativeBucketApi",
@@ -991,7 +991,7 @@
       "reports": [
         "ReportGoal (includes savings_target_count)",
         "ReportSchedule",
-        "ReportSummary",
+        "ReportSummary (v3.14.0: gained generation_status: 'pending' | 'complete' | 'failed' and generation_error: string | null)",
         "GoalTrendPoint",
         "GoalTrendData",
         "ExpenseItem (includes item_type, savings_target_amount, savings_target_date, savings_is_recurring, savings_recurrence_months, assumed_growth_rate_pct, savings_current_balance)"

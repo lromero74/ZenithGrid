@@ -1933,6 +1933,8 @@ def initialize_database(project_root, db_config=None):
                 delivered_at DATETIME,
                 delivery_recipients TEXT,
                 delivery_error TEXT,
+                generation_status TEXT NOT NULL DEFAULT 'complete',
+                generation_error TEXT,
                 created_at DATETIME DEFAULT CURRENT_TIMESTAMP
             )
         """)

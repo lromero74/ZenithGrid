@@ -5,6 +5,11 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v3.14.0] - 2026-06-27
+
+### Changed
+- **Reports now generate in the background instead of making you wait.** Clicking "Generate Now" returns instantly and the report appears in Report History as "Generating…", then becomes the finished report on its own (the list refreshes itself while it works) — no more staring at a spinner or wondering whether it worked. If a report can't be produced it shows a clear "Failed" state instead of silently going missing, and a report that's still generating can't be opened until it's ready. This removes the earlier class of problem where a slow report finished on the server but never showed up on screen.
+
 ## [v3.13.30] - 2026-06-27
 
 ### Fixed

@@ -378,6 +378,10 @@ class Report(Base):
     delivered_at = Column(DateTime, nullable=True)
     delivery_recipients = Column(JSON, nullable=True)  # Snapshot of who received it
     delivery_error = Column(Text, nullable=True)
+    # Generation lifecycle (async manual generation): pending → complete | failed.
+    # Scheduled/synchronous rows are written as 'complete' directly.
+    generation_status = Column(String, nullable=False, default="complete")  # pending/complete/failed
+    generation_error = Column(Text, nullable=True)
     created_at = Column(DateTime, default=utcnow)
 
     # Relationships

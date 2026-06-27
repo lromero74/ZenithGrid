@@ -1460,25 +1460,20 @@ describe('reportsApi', () => {
     })
   })
 
-  test('generateReport sends schedule id with extended timeout', async () => {
-    vi.mocked(api.post).mockResolvedValue({ data: { id: 1 } })
+  test('generateReport sends schedule id (async — default timeout)', async () => {
+    vi.mocked(api.post).mockResolvedValue({ data: { id: 1, generation_status: 'pending' } })
 
     await reportsApi.generateReport(5)
-    // Report generation is synchronous and bundles a slow AI-summary call + PDF
-    // render that routinely exceeds the 45s axios default. Without a longer
-    // ceiling the client aborts before the backend finishes, the mutation's
-    // onSuccess never fires, and report history stays frozen on its stale
-    // (empty) cache even though the report was actually created + emailed.
-    expect(api.post).toHaveBeenCalledWith(
-      '/reports/generate',
-      { schedule_id: 5 },
-      { timeout: 180000 },
-    )
+    // Generation is async now: the request returns a pending row immediately and
+    // the render happens in the background, so the default timeout is correct
+    // (no per-call override).
+    expect(api.post).toHaveBeenCalledWith('/reports/generate', { schedule_id: 5 })
   })
 
   test('previewReport sends schedule id with extended timeout', async () => {
     vi.mocked(api.post).mockResolvedValue({ data: { id: 1 } })
 
+    // Preview is still synchronous (rendered inline) and routinely exceeds 45s.
     await reportsApi.previewReport(5)
     expect(api.post).toHaveBeenCalledWith(
       '/reports/preview',

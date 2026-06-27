@@ -1095,11 +1095,13 @@ export const reportsApi = {
     }).then(r => r.data),
   getReport: (id: number) => api.get<ReportSummary>(`/reports/${id}`).then(r => r.data),
   downloadPdf: (id: number) => api.get(`/reports/${id}/pdf`, { responseType: 'blob' }).then(r => r.data),
-  // Generation is synchronous server-side (AI summary + chart/PDF render) and
-  // routinely runs longer than the 45s axios default; use a 3-minute ceiling so
-  // the client doesn't abort before the backend finishes the report.
+  // Generation is asynchronous: this returns immediately with a `pending` report
+  // row and the heavy AI/PDF render happens in the background (poll history for
+  // completion). The default request timeout is fine.
   generateReport: (scheduleId: number) =>
-    api.post<ReportSummary>('/reports/generate', { schedule_id: scheduleId }, { timeout: 180000 }).then(r => r.data),
+    api.post<ReportSummary>('/reports/generate', { schedule_id: scheduleId }).then(r => r.data),
+  // Preview is still synchronous (renders inline for the user, who is waiting);
+  // the AI+PDF work routinely exceeds the 45s default, so keep a 3-minute ceiling.
   previewReport: (scheduleId: number) =>
     api.post<ReportSummary>('/reports/preview', { schedule_id: scheduleId }, { timeout: 180000 }).then(r => r.data),
   deleteReport: (id: number) =>

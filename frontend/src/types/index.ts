@@ -683,6 +683,8 @@ export interface ReportSummary {
   delivery_status: string
   delivered_at: string | null
   delivery_recipients?: string[] | null
+  generation_status?: 'pending' | 'complete' | 'failed'
+  generation_error?: string | null
   has_pdf: boolean
   html_content?: string | null
   created_at: string | null
