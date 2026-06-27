@@ -5,6 +5,11 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v3.13.21] - 2026-06-26
+
+### Changed
+- **Backend symbol registry snapshot is current again.** Regenerated the symbol registry after the v3.13.20 order-monitor session-scope refactor so future duplicate-function checks include the new helper entry points.
+
 ## [v3.13.20] - 2026-06-26
 
 ### Fixed

@@ -3025,6 +3025,10 @@
       ]
     },
     "functions": [
+      "_apply_polled_limit_order",
+      "_check_all_pending_limit_orders_scoped",
+      "_poll_limit_order_without_db",
+      "_snapshot_pending_limit_orders",
       "check_all_pending_limit_orders",
       "sweep_orphaned_pending_orders"
     ]
@@ -3469,6 +3473,10 @@
       ]
     },
     "functions": [
+      "_apply_polled_safety_order",
+      "_check_all_pending_safety_orders_scoped",
+      "_poll_safety_order_without_db",
+      "_snapshot_pending_safety_orders",
       "check_all_pending_safety_orders"
     ]
   },
