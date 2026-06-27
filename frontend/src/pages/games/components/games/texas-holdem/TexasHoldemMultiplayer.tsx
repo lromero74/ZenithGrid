@@ -113,6 +113,10 @@ export function TexasHoldemMultiplayer({ roomId, players: initialPlayers, player
       })
     }, 5000)
     return () => clearInterval(timer)
+  // Host-only 5s blinds-increase interval, keyed on isHost/gameStatus. It calls the
+  // broadcastState sender; depending on that (re-created each render) would restart the
+  // interval continuously. roomId is effectively constant for the room's lifetime.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isHost, gameStatus])
 
   // ── Host: Auto-run AI turns ──

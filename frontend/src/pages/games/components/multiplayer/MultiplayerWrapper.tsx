@@ -377,9 +377,7 @@ export function MultiplayerWrapper({
         hasDifficulty={config.hasDifficulty ?? false}
         availableModes={config.modes}
         selectedMultiplayerMode={selectedMultiplayerMode}
-        onModeChange={(m) => {
-          setSelectedMultiplayerMode(m)
-        }}
+        onModeChange={setSelectedMultiplayerMode}
         onGameStart={handleGameStart}
         onBack={handleBackToSelect}
         initialRoom={roomId ? { roomId, players, playerNames, config: roomConfig, hostUserId } : undefined}

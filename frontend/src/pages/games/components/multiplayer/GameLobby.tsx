@@ -169,7 +169,7 @@ export function GameLobby({ gameId, gameName, mode, raceType, maxPlayers = 2, ha
       }),
     ]
     return () => unsubs.forEach(fn => fn())
-  }, [onGameStart, roomConfig])
+  }, [onGameStart, roomConfig, onModeChange, user?.id])
 
   const createRoom = useCallback(() => {
     setError(null)

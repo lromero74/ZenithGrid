@@ -292,7 +292,10 @@ function BackgammonSinglePlayer({ onGameEnd, onStateChange: _onStateChange }: { 
 
   // Handle point click (select source or destination)
   const handlePointClick = useCallback((point: number | 'bar') => {
-    if (gameStatus !== 'playing' || gameState.currentPlayer !== 'white' || disabled) return
+    // `disabled` (defined below) is gameStatus/currentPlayer/gamePhase; the first
+    // two are already checked here, so inline its unique gamePhase clause to keep
+    // this callback's deps explicit (gameState is already a dep) without a forward ref.
+    if (gameStatus !== 'playing' || gameState.currentPlayer !== 'white' || gameState.gamePhase !== 'moving') return
 
     music.init()
     sfx.init()
@@ -351,6 +354,26 @@ function BackgammonSinglePlayer({ onGameEnd, onStateChange: _onStateChange }: { 
     }
   }, [gameState, gameStatus, selectedPoint, getAllCurrentMoves, finishTurn])
 
+  // Separate function for AI roll to avoid stale closure
+  const handleRollForAI = useCallback(() => {
+    const dice = rollDice()
+    const newState: BackgammonState = {
+      ...gameState,
+      dice,
+      usedDice: dice.map(() => false),
+      gamePhase: 'moving',
+    }
+
+    if (!hasValidMoves(newState)) {
+      finishTurn(newState)
+      aiThinking.current = false
+      return
+    }
+
+    setGameState(newState)
+    aiThinking.current = false
+  }, [gameState, finishTurn])
+
   // AI turn
   useEffect(() => {
     if (gameState.currentPlayer !== 'brown' || gameStatus !== 'playing') return
@@ -386,27 +409,8 @@ function BackgammonSinglePlayer({ onGameEnd, onStateChange: _onStateChange }: { 
       }, 500)
       return () => clearTimeout(timer)
     }
-  }, [gameState, gameStatus, finishTurn])
+  }, [gameState, gameStatus, finishTurn, handleRollForAI])
 
-  // Separate function for AI roll to avoid stale closure
-  const handleRollForAI = useCallback(() => {
-    const dice = rollDice()
-    const newState: BackgammonState = {
-      ...gameState,
-      dice,
-      usedDice: dice.map(() => false),
-      gamePhase: 'moving',
-    }
-
-    if (!hasValidMoves(newState)) {
-      finishTurn(newState)
-      aiThinking.current = false
-      return
-    }
-
-    setGameState(newState)
-    aiThinking.current = false
-  }, [gameState, finishTurn])
 
   const handleNewGame = useCallback(() => {
     setGameState(createBoard())
