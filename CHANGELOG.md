@@ -5,6 +5,11 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v3.13.22] - 2026-06-26
+
+### Changed
+- **Documented the next no-infrastructure trader session-scope cleanup.** Added the post-deploy finding that rebalancer-group, blacklist, position, and trade reads can still appear as short `idle in transaction` rows even though overall PostgreSQL connection pressure is now healthy.
+
 ## [v3.13.21] - 2026-06-26
 
 ### Changed
