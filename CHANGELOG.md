@@ -5,6 +5,11 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v3.14.4] - 2026-06-27
+
+### Changed
+- **Multiplayer game messaging is now strongly-typed (no behavior change).** The multiplayer WebSocket bus and every game's message handler (lobby, race overlay, invites, and all board/card games) now use typed message shapes instead of loose `any` payloads, so malformed-message bugs surface at build time. This completes the type-safety cleanup of all application code — every non-test `any` in the web app has been eliminated (183 of 352 total; the remainder are test-suite mocks). Verified behavior-identical across the full 2,792-test suite.
+
 ## [v3.14.3] - 2026-06-27
 
 ### Changed
