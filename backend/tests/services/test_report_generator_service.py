@@ -10,6 +10,7 @@ Tests cover:
 
 import json
 import re
+from datetime import datetime
 from unittest.mock import patch
 
 import pytest
@@ -39,6 +40,13 @@ from app.services.report_generator_service import (
 
 
 BRAND_COLOR = "#3b82f6"
+
+# Pin "now" to an early-month weekday so the "upcoming this month" window always
+# still contains a remaining occurrence (otherwise these assertions depend on the
+# wall-clock date the suite happens to run on). June 1 2026 is a Monday, so the
+# Fridays of the month (5th, 12th, 19th, 26th) are all still ahead.
+_FIXED_NOW = datetime(2026, 6, 1)
+_UTCNOW_TARGET = "app.services.report_generator_service.expense_sections.utcnow"
 
 MOCK_BRAND = {
     "shortName": "TestBot",
@@ -735,7 +743,8 @@ class TestBuildExpensesGoalCardTabs:
         g = _make_expense_goal([
             {"name": "Groceries", "amount": 100, "frequency": "weekly", "due_day": 4},
         ])
-        html = _build_expenses_goal_card(g)
+        with patch(_UTCNOW_TARGET, return_value=_FIXED_NOW):
+            html = _build_expenses_goal_card(g)
         assert "Fri" in html  # 4 = Friday
 
     def test_yearly_item_with_month(self):
@@ -757,7 +766,8 @@ class TestBuildExpensesGoalCardTabs:
              "due_day": 4, "normalized_amount": 433.33},
         ])
         # Use email_mode to get stacked sections (easier to parse)
-        html = _build_expenses_goal_card(g, email_mode=True)
+        with patch(_UTCNOW_TARGET, return_value=_FIXED_NOW):
+            html = _build_expenses_goal_card(g, email_mode=True)
         # Find the Groceries row in the upcoming section
         # In email mode, upcoming section appears after ">Upcoming</p>"
         upcoming_start = html.find(">Upcoming</p>")

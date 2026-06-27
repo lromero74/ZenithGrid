@@ -62,6 +62,23 @@ const getStatusBadge = (status: string) => {
   }
 }
 
+// A report whose background generation has finished (or a legacy row with no
+// generation_status) — only these are viewable/downloadable.
+const isReportReady = (report: ReportSummary) =>
+  report.generation_status !== 'pending' && report.generation_status !== 'failed'
+
+// Generation state takes precedence over delivery state in the history list:
+// a row is first "Generating…", then either its delivery badge or "Failed".
+const getReportStatus = (report: ReportSummary) => {
+  if (report.generation_status === 'pending') {
+    return <span className="inline-flex items-center gap-1 text-xs text-amber-400"><Loader2 className="w-3 h-3 animate-spin" /> Generating…</span>
+  }
+  if (report.generation_status === 'failed') {
+    return <span className="inline-flex items-center gap-1 text-xs text-red-400" title={report.generation_error || 'Generation failed'}><AlertCircle className="w-3 h-3" /> Failed</span>
+  }
+  return getStatusBadge(report.delivery_status)
+}
+
 const getTimeRemaining = (targetDate: string | null) => {
   if (!targetDate) return ''
   const now = new Date()
@@ -129,6 +146,10 @@ export default function Reports() {
   const { data: historyData, isLoading: historyLoading } = useQuery({
     queryKey: ['report-history', historyPage, selectedAccount?.id],
     queryFn: () => reportsApi.getHistory(PAGE_SIZE, historyPage * PAGE_SIZE, undefined, selectedAccount?.id),
+    // While any report is still generating in the background, poll so the row
+    // flips from "Generating…" to the finished report (or "Failed") on its own.
+    refetchInterval: (query) =>
+      (query.state.data?.reports ?? []).some(r => r.generation_status === 'pending') ? 4000 : false,
   })
 
   // ---------- Mutations ----------
@@ -168,20 +189,21 @@ export default function Reports() {
   const generateReport = useMutation({
     mutationFn: (scheduleId: number) => reportsApi.generateReport(scheduleId),
     onSuccess: () => {
+      // Returns a `pending` row immediately; it renders in the background and the
+      // history query polls until it flips to complete/failed.
       queryClient.invalidateQueries({ queryKey: ['report-history'] })
-      queryClient.invalidateQueries({ queryKey: ['report-schedules'] })
-      addToast({ type: 'success', title: 'Report generated', message: 'Your report is ready in Report History.' })
+      addToast({
+        type: 'success',
+        title: 'Generating report…',
+        message: 'It will appear in Report History in a moment.',
+      })
       setActiveTab('history')
     },
     onError: () => {
-      // Generation can outlast the client/proxy request window even though the
-      // backend finishes and saves the report. Refetch history regardless so a
-      // server-completed report still surfaces, and tell the user where to look.
-      queryClient.invalidateQueries({ queryKey: ['report-history'] })
       addToast({
         type: 'error',
-        title: 'Report is taking longer than expected',
-        message: 'It may still be finishing. Check Report History in a moment — if it does not appear, try again.',
+        title: 'Could not start report',
+        message: 'Something went wrong kicking off generation. Please try again.',
       })
     },
   })
@@ -612,17 +634,19 @@ export default function Reports() {
                       <td className="py-2.5 px-3 text-sm text-slate-300">
                         {formatDate(report.period_start)} — {formatDate(report.period_end)}
                       </td>
-                      <td className="py-2.5 px-3">{getStatusBadge(report.delivery_status)}</td>
+                      <td className="py-2.5 px-3">{getReportStatus(report)}</td>
                       <td className="py-2.5 px-3 text-sm text-slate-400">{formatDateTime(report.created_at)}</td>
                       <td className="py-2.5 px-3 text-right">
                         <div className="flex items-center justify-end gap-1">
-                          <button
-                            onClick={() => handleViewReport(report.id)}
-                            className="p-1.5 text-slate-400 hover:text-blue-400 transition-colors"
-                            title="View Report"
-                          >
-                            <Eye className="w-4 h-4" />
-                          </button>
+                          {isReportReady(report) && (
+                            <button
+                              onClick={() => handleViewReport(report.id)}
+                              className="p-1.5 text-slate-400 hover:text-blue-400 transition-colors"
+                              title="View Report"
+                            >
+                              <Eye className="w-4 h-4" />
+                            </button>
+                          )}
                           {report.has_pdf && (
                             <button
                               onClick={() => handleDownloadPdf(report.id)}
@@ -668,17 +692,19 @@ export default function Reports() {
                         </p>
                         <div className="flex items-center gap-2 mt-1">
                           <span className="text-xs text-slate-400 capitalize">{report.periodicity}</span>
-                          {getStatusBadge(report.delivery_status)}
+                          {getReportStatus(report)}
                         </div>
                       </div>
                     </div>
                     <div className="flex items-center gap-1">
-                      <button
-                        onClick={() => handleViewReport(report.id)}
-                        className="p-1.5 text-slate-400 hover:text-blue-400"
-                      >
-                        <Eye className="w-4 h-4" />
-                      </button>
+                      {isReportReady(report) && (
+                        <button
+                          onClick={() => handleViewReport(report.id)}
+                          className="p-1.5 text-slate-400 hover:text-blue-400"
+                        >
+                          <Eye className="w-4 h-4" />
+                        </button>
+                      )}
                       {report.has_pdf && (
                         <button
                           onClick={() => handleDownloadPdf(report.id)}

@@ -118,6 +118,8 @@ def report_to_dict(report: Report, include_html: bool = False) -> dict:
         "delivery_status": report.delivery_status,
         "delivered_at": report.delivered_at.isoformat() if report.delivered_at else None,
         "delivery_recipients": report.delivery_recipients,
+        "generation_status": getattr(report, "generation_status", "complete"),
+        "generation_error": getattr(report, "generation_error", None),
         "has_pdf": report.pdf_content is not None,
         "created_at": report.created_at.isoformat() if report.created_at else None,
     }

@@ -5,6 +5,7 @@ Background task that checks for due report schedules and generates reports.
 Also provides the generate_report_for_schedule function used by manual triggers.
 """
 
+import asyncio
 import calendar
 from app.utils.timeutil import utcnow
 import json
@@ -14,7 +15,7 @@ from datetime import datetime, timedelta
 from typing import List, Optional, Tuple
 
 from dateutil.relativedelta import relativedelta
-from sqlalchemy import and_, func, select
+from sqlalchemy import and_, func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -205,6 +206,19 @@ async def _advance_schedule_timing(
         )
 
 
+def _compute_report_period(schedule: ReportSchedule, now: datetime) -> Tuple[datetime, datetime, str]:
+    """Resolve a schedule's period bounds + human label (fast, no I/O)."""
+    if schedule.schedule_type:
+        period_start, period_end = compute_period_bounds_flexible(schedule, now)
+    else:
+        # Legacy fallback for unmigrated schedules
+        period_start, period_end = _compute_period_bounds_legacy(
+            schedule.periodicity, now
+        )
+    period_label = _format_period_label(period_start, period_end)
+    return period_start, period_end, period_label
+
+
 async def generate_report_for_schedule(
     db: AsyncSession,
     schedule: ReportSchedule,
@@ -212,6 +226,7 @@ async def generate_report_for_schedule(
     save: bool = True,
     send_email: bool = True,
     advance_schedule: bool = True,
+    report: Optional[Report] = None,
 ) -> Report:
     """
     Generate a report for a given schedule.
@@ -220,6 +235,10 @@ async def generate_report_for_schedule(
         advance_schedule: If True, update last_run_at and next_run_at.
             Set to False for ad-hoc/manual runs so they don't affect
             the scheduled cadence.
+        report: If provided, fill in this existing (e.g. ``pending``) row in
+            place instead of creating a new one — used by async manual
+            generation so the row that was returned to the client becomes the
+            finished report. The row is flipped to ``generation_status='complete'``.
     """
     from app.services.report_ai_service import generate_report_summary
     from app.services.report_data_service import (
@@ -234,17 +253,8 @@ async def generate_report_for_schedule(
 
     now = utcnow()
 
-    # Compute period bounds using new flexible logic
-    if schedule.schedule_type:
-        period_start, period_end = compute_period_bounds_flexible(
-            schedule, now
-        )
-    else:
-        # Legacy fallback for unmigrated schedules
-        period_start, period_end = _compute_period_bounds_legacy(
-            schedule.periodicity, now
-        )
-    period_label = _format_period_label(period_start, period_end)
+    # Compute period bounds (flexible logic, with legacy fallback)
+    period_start, period_end, period_label = _compute_report_period(schedule, now)
 
     # Get linked goals
     goals = await _fetch_schedule_goals(db, schedule, user.id)
@@ -321,25 +331,41 @@ async def generate_report_for_schedule(
             if isinstance(ai_summary, dict) else ai_summary
         )
 
-    # Create report object
-    report = Report(
-        user_id=user.id,
-        account_id=schedule.account_id,
-        schedule_id=schedule.id,
-        period_start=period_start,
-        period_end=period_end,
-        periodicity=schedule.periodicity,
-        report_data=report_data,
-        html_content=html_content,
-        pdf_content=pdf_content,
-        ai_summary=ai_summary_str,
-        ai_provider_used=ai_provider_used,
-        delivery_status="pending" if (send_email and schedule.recipients) else "manual",
-    )
+    initial_delivery_status = "pending" if (send_email and schedule.recipients) else "manual"
+
+    # Create a new row, or fill in an existing (pending) one in place.
+    if report is None:
+        report = Report(
+            user_id=user.id,
+            account_id=schedule.account_id,
+            schedule_id=schedule.id,
+            period_start=period_start,
+            period_end=period_end,
+            periodicity=schedule.periodicity,
+            report_data=report_data,
+            html_content=html_content,
+            pdf_content=pdf_content,
+            ai_summary=ai_summary_str,
+            ai_provider_used=ai_provider_used,
+            delivery_status=initial_delivery_status,
+            generation_status="complete",
+        )
+    else:
+        report.period_start = period_start
+        report.period_end = period_end
+        report.periodicity = schedule.periodicity
+        report.report_data = report_data
+        report.html_content = html_content
+        report.pdf_content = pdf_content
+        report.ai_summary = ai_summary_str
+        report.ai_provider_used = ai_provider_used
+        report.delivery_status = initial_delivery_status
+        report.generation_status = "complete"
+        report.generation_error = None
 
     if save:
         db.add(report)
-        await db.flush()  # Get the report.id
+        await db.flush()  # Get the report.id (no-op if it already has one)
 
     # Send email to all recipients (same report for everyone)
     if send_email and save and schedule.recipients:
@@ -379,6 +405,124 @@ async def generate_report_for_schedule(
                 )
 
     return report
+
+
+# ── Async manual generation ──────────────────────────────────────────────────
+# Strong refs to in-flight background tasks so they aren't garbage-collected
+# mid-run (asyncio only holds a weak ref to a bare create_task result).
+_BG_TASKS: set = set()
+
+# A pending report older than this is assumed orphaned (process died mid-run).
+_PENDING_ORPHAN_MINUTES = 15
+
+
+def _spawn_bg(coro) -> None:
+    """Fire-and-forget a coroutine, keeping a strong ref until it completes."""
+    task = asyncio.create_task(coro)
+    _BG_TASKS.add(task)
+    task.add_done_callback(_BG_TASKS.discard)
+
+
+async def _reap_orphaned_pending_reports(
+    db: AsyncSession, older_than_minutes: int = _PENDING_ORPHAN_MINUTES
+) -> int:
+    """Mark long-stuck ``pending`` reports as ``failed`` (self-heal after a crash/restart)."""
+    cutoff = utcnow() - timedelta(minutes=older_than_minutes)
+    result = await db.execute(
+        update(Report)
+        .where(Report.generation_status == "pending", Report.created_at < cutoff)
+        .values(
+            generation_status="failed",
+            generation_error="Generation did not finish (the server restarted). Please try again.",
+        )
+    )
+    if result.rowcount:
+        await db.commit()
+        logger.info("Reaped %d orphaned pending report(s)", result.rowcount)
+    return result.rowcount or 0
+
+
+async def start_manual_report_generation(
+    db: AsyncSession,
+    schedule: ReportSchedule,
+    user: User,
+    send_email: bool = True,
+    session_maker=None,
+) -> Report:
+    """
+    Create a ``pending`` report row and kick off generation in the background,
+    returning the pending row immediately.
+
+    The heavy work (data gather + AI summary + PDF render) routinely takes longer
+    than a client/proxy request window; doing it synchronously made the request
+    time out while the report finished server-side, leaving the UI stuck. The
+    pending row appears in history as "Generating…" and the client polls until it
+    flips to ``complete``/``failed``.
+    """
+    await _reap_orphaned_pending_reports(db)
+
+    period_start, period_end, _ = _compute_report_period(schedule, utcnow())
+    report = Report(
+        user_id=user.id,
+        account_id=schedule.account_id,
+        schedule_id=schedule.id,
+        period_start=period_start,
+        period_end=period_end,
+        periodicity=schedule.periodicity,
+        generation_status="pending",
+        delivery_status="pending" if (send_email and schedule.recipients) else "manual",
+    )
+    db.add(report)
+    await db.commit()
+    await db.refresh(report)
+
+    _spawn_bg(_run_manual_generation_bg(
+        report.id, schedule.id, user.id, send_email, session_maker=session_maker
+    ))
+    return report
+
+
+async def _run_manual_generation_bg(
+    report_id: int, schedule_id: int, user_id: int, send_email: bool,
+    session_maker=None,
+) -> None:
+    """Background worker: render the pending report and flip it to complete/failed."""
+    sm = session_maker or _default_session_maker
+    try:
+        async with sm() as bg_db:
+            report = await bg_db.get(Report, report_id)
+            schedule = await bg_db.get(ReportSchedule, schedule_id)
+            user = await bg_db.get(User, user_id)
+            if not (report and schedule and user):
+                logger.warning(
+                    "Manual report generation: row/schedule/user missing (report %s)", report_id
+                )
+                return
+            await generate_report_for_schedule(
+                bg_db, schedule, user,
+                save=True, send_email=send_email, advance_schedule=False,
+                report=report,
+            )
+        logger.info("Manual report %s generated", report_id)
+    except Exception as e:  # noqa: BLE001 — any failure must mark the row failed
+        logger.error(
+            "Manual report generation failed (report %s): %s", report_id, e, exc_info=True
+        )
+        await _mark_report_failed(report_id, str(e), session_maker=sm)
+
+
+async def _mark_report_failed(report_id: int, error: str, session_maker=None) -> None:
+    """Flip a report row to ``failed`` from a fresh session (the worker's may be poisoned)."""
+    sm = session_maker or _default_session_maker
+    try:
+        async with sm() as db:
+            report = await db.get(Report, report_id)
+            if report and report.generation_status != "complete":
+                report.generation_status = "failed"
+                report.generation_error = (error or "Generation failed")[:500]
+                await db.commit()
+    except Exception as e:  # noqa: BLE001
+        logger.error("Could not mark report %s failed: %s", report_id, e)
 
 
 @dataclass

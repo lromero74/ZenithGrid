@@ -580,14 +580,17 @@ async def generate_report(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission(Perm.REPORTS_WRITE)),
 ) -> dict:
-    """Manually trigger report generation for a schedule."""
+    """Manually trigger report generation for a schedule.
+
+    Returns immediately with a ``pending`` report row; generation runs in the
+    background and the row flips to ``complete``/``failed`` (the client polls
+    history until then).
+    """
     schedule, _uid = await get_writable_schedule(db, body.schedule_id, current_user)
 
-    # Generate the report (ad-hoc — don't advance schedule timing)
-    from app.services.report_scheduler import generate_report_for_schedule
-    report = await generate_report_for_schedule(
-        db, schedule, current_user, advance_schedule=False,
-    )
+    # Kick off async generation (ad-hoc — don't advance schedule timing)
+    from app.services.report_scheduler import start_manual_report_generation
+    report = await start_manual_report_generation(db, schedule, current_user)
 
     return report_to_dict(report, include_html=True)
 

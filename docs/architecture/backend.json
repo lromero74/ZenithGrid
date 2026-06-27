@@ -138,7 +138,7 @@
     {
       "file": "routers/reports_generation_router.py",
       "prefix": "/api/reports",
-      "purpose": "Report generation endpoints, expense item CRUD (supports both expense and savings_target item types), expense categories, goal trend data with auto-backfill; ExpenseItemCreate/ExpenseItemUpdate schemas carry savings fields; list_expense_items returns dict (not List[dict]); split from reports_router.py. MUST be included before reports_crud_router in main.py so specific string-typed routes like /api/reports/expense-categories match before the int-typed /{report_id} catch-all (see TestReportsRouteOrdering in tests/routers/test_reports_router.py)."
+      "purpose": "Report generation endpoints, expense item CRUD (supports both expense and savings_target item types), expense categories, goal trend data with auto-backfill; ExpenseItemCreate/ExpenseItemUpdate schemas carry savings fields; list_expense_items returns dict (not List[dict]); split from reports_router.py. MUST be included before reports_crud_router in main.py so specific string-typed routes like /api/reports/expense-categories match before the int-typed /{report_id} catch-all (see TestReportsRouteOrdering in tests/routers/test_reports_router.py). v3.14.0: POST /api/reports/generate is now asynchronous — creates a pending Report row and returns it immediately (HTTP 202-style); a background task calls report_scheduler.start_manual_report_generation and flips the row to complete or failed."
     },
     {
       "file": "routers/reports_crud_router.py",
@@ -969,9 +969,11 @@
         "schedule_id",
         "metrics_json",
         "html_content",
-        "pdf_data"
+        "pdf_data",
+        "generation_status",
+        "generation_error"
       ],
-      "purpose": "Generated report instances with metrics, HTML, PDF, and AI summary"
+      "purpose": "Generated report instances with metrics, HTML, PDF, and AI summary. v3.14.0: generation_status (String, NOT NULL, default 'complete'; values: pending/complete/failed) and generation_error (Text, nullable) support async report generation — a row is created with status 'pending' immediately on POST /api/reports/generate and flipped to 'complete' or 'failed' by the background task."
     },
     {
       "name": "AccountTransfer",
@@ -1564,7 +1566,7 @@
     },
     {
       "file": "services/report_access.py",
-      "purpose": "Shared access-control helpers for report goals, schedules, and reports: get_accessible_goal (owner or observer/manager), get_writable_goal (owner or manager), get_writable_schedule, report_to_dict. Used by both reports_crud_router and reports_generation_router; extracted from reports_crud_router in Phase 5.3.",
+      "purpose": "Shared access-control helpers for report goals, schedules, and reports: get_accessible_goal (owner or observer/manager), get_writable_goal (owner or manager), get_writable_schedule, report_to_dict. Used by both reports_crud_router and reports_generation_router; extracted from reports_crud_router in Phase 5.3. v3.14.0: report_to_dict now includes generation_status and generation_error so list/detail responses expose async generation state.",
       "type": "infrastructure"
     },
     {
@@ -1589,7 +1591,7 @@
     },
     {
       "file": "services/report_scheduler.py",
-      "purpose": "Background task that checks for due report schedules and generates reports; also provides manual trigger function; DeliverReportParams dataclass used for report delivery parameterization",
+      "purpose": "Background task that checks for due report schedules and generates reports; also provides manual trigger function; DeliverReportParams dataclass used for report delivery parameterization. v3.14.0: adds start_manual_report_generation (creates a pending Report row + schedules background render, returns immediately), _run_manual_generation_bg (background worker that fills the pending row), _mark_report_failed (records error and flips status to failed), _reap_orphaned_pending_reports (cleans up stuck pending rows on startup), and _compute_report_period (shared period derivation). generate_report_for_schedule now accepts an optional report= arg to fill an existing pending row in place.",
       "type": "background"
     },
     {
@@ -2408,7 +2410,7 @@
     }
   ],
   "migrations": {
-    "count": 106,
+    "count": 107,
     "naming_pattern": "snake_case descriptive names (e.g., add_account_value_snapshots.py)",
     "directory": "backend/migrations/",
     "discovery": "Auto-discovered by update.py",
@@ -2518,6 +2520,7 @@
       "091_bots_webhook_token.py",
       "092_ai_team_runs.py",
       "093_fix_bots_id_sequence.py",
+      "094_report_generation_status.py",
       "add_perf_indexes_tier3.py",
       "set_fk_delete_policies.py"
     ]
