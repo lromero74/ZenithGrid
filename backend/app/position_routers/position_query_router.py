@@ -8,6 +8,7 @@ import logging
 from app.utils.timeutil import utcnow
 from collections import defaultdict
 from datetime import datetime, timedelta
+import time
 from typing import Dict, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Response
@@ -25,6 +26,17 @@ from app.constants import VALID_CATEGORIES
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
+
+POSITIONS_SUMMARY_CACHE_TTL_SECONDS = 20.0
+_positions_summary_cache: Dict[tuple[int, int], tuple[float, dict]] = {}
+
+
+def _get_page_summary_cache_key(user_id: int, account_id: int) -> tuple[int, int]:
+    return user_id, account_id
+
+
+def clear_positions_summary_cache() -> None:
+    _positions_summary_cache.clear()
 
 LIST_SAFE_STRATEGY_CONFIG_KEYS = {
     "take_profit_percentage",
@@ -698,14 +710,26 @@ async def get_positions_summary(
     current_user: User = Depends(get_current_user),
 ):
     """Return the three account-scoped summary panels in one HTTP response."""
+    user_account_ids = await accessible_account_ids(db, current_user.id)
+    if account_id not in user_account_ids:
+        raise HTTPException(status_code=404, detail="Account not found")
+
+    cache_key = _get_page_summary_cache_key(current_user.id, account_id)
+    now = time.monotonic()
+    cached = _positions_summary_cache.get(cache_key)
+    if cached and now - cached[0] < POSITIONS_SUMMARY_CACHE_TTL_SECONDS:
+        return cached[1]
+
     completed_stats = await get_completed_trades_stats(account_id, db, current_user)
     realized_pnl = await get_realized_pnl(account_id, db, current_user)
     balances = await get_account_balances(db, current_user, account_id)
-    return {
+    summary = {
         "completed_stats": completed_stats,
         "realized_pnl": realized_pnl,
         "balances": balances,
     }
+    _positions_summary_cache[cache_key] = (now, summary)
+    return summary
 
 
 @router.get("/ai-opinions", response_model=Dict[int, Optional[AIOpinionLogResponse]])

@@ -353,8 +353,9 @@ class TestRealizedPnlAggregation:
 
 @pytest.mark.asyncio
 async def test_page_summary_passes_required_account_to_every_source():
-    from app.position_routers.position_query_router import get_positions_summary
+    from app.position_routers.position_query_router import clear_positions_summary_cache, get_positions_summary
 
+    clear_positions_summary_cache()
     db = MagicMock()
     user = MagicMock(id=3)
     with (
@@ -370,6 +371,10 @@ async def test_page_summary_passes_required_account_to_every_source():
             "app.position_routers.position_query_router.get_account_balances",
             new=AsyncMock(return_value={"USD": 20.0}),
         ) as balances,
+        patch(
+            "app.position_routers.position_query_router.accessible_account_ids",
+            new=AsyncMock(return_value=[7]),
+        ),
     ):
         result = await get_positions_summary(account_id=7, db=db, current_user=user)
 
@@ -381,3 +386,38 @@ async def test_page_summary_passes_required_account_to_every_source():
         "realized_pnl": {"alltime_profit_usd": 4.0},
         "balances": {"USD": 20.0},
     }
+
+
+@pytest.mark.asyncio
+async def test_page_summary_reuses_short_account_cache():
+    from app.position_routers.position_query_router import clear_positions_summary_cache, get_positions_summary
+
+    clear_positions_summary_cache()
+    db = MagicMock()
+    user = MagicMock(id=3)
+    with (
+        patch(
+            "app.position_routers.position_query_router.get_completed_trades_stats",
+            new=AsyncMock(return_value={"total_trades": 2}),
+        ) as completed,
+        patch(
+            "app.position_routers.position_query_router.get_realized_pnl",
+            new=AsyncMock(return_value={"alltime_profit_usd": 4.0}),
+        ) as realized,
+        patch(
+            "app.position_routers.position_query_router.get_account_balances",
+            new=AsyncMock(return_value={"USD": 20.0}),
+        ) as balances,
+        patch(
+            "app.position_routers.position_query_router.accessible_account_ids",
+            new=AsyncMock(return_value=[7]),
+        ),
+    ):
+        first = await get_positions_summary(account_id=7, db=db, current_user=user)
+        second = await get_positions_summary(account_id=7, db=db, current_user=user)
+
+    assert second == first
+    completed.assert_awaited_once()
+    realized.assert_awaited_once()
+    balances.assert_awaited_once()
+    clear_positions_summary_cache()

@@ -9,6 +9,7 @@ The scheduler uses AsyncIOScheduler so it shares the FastAPI event loop.
 """
 
 import logging
+import asyncio
 from datetime import datetime, timedelta
 
 from apscheduler.events import EVENT_JOB_ERROR
@@ -27,6 +28,9 @@ scheduler = AsyncIOScheduler()
 
 def _job_error_handler(event):
     if event.exception:
+        if isinstance(event.exception, asyncio.CancelledError):
+            logger.debug("APScheduler job '%s' cancelled during shutdown", event.job_id)
+            return
         logger.error(
             f"APScheduler job '{event.job_id}' raised {type(event.exception).__name__}: {event.exception}",
             exc_info=(type(event.exception), event.exception, event.traceback),

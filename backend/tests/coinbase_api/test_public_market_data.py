@@ -290,6 +290,18 @@ class TestGetProduct:
             result = await get_product("ETH-BTC")
             assert result["product_id"] == "ETH-BTC"
 
+    @pytest.mark.asyncio
+    async def test_usd_equivalent_stable_pair_skips_product_request(self):
+        """USDC-USD is local valuation metadata, not a Coinbase product probe."""
+        mock = AsyncMock()
+
+        with patch("app.coinbase_api.public_market_data._public_request", mock):
+            result = await get_product("USDC-USD")
+
+        assert result["product_id"] == "USDC-USD"
+        assert result["price"] == "1.0"
+        mock.assert_not_called()
+
 
 # ---------------------------------------------------------------------------
 # get_ticker

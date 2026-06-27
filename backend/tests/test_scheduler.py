@@ -182,3 +182,18 @@ class TestErrorListener:
         with mock.patch("app.scheduler.logger") as mock_logger:
             _job_error_handler(mock_event)
             mock_logger.error.assert_not_called()
+
+    def test_error_listener_ignores_cancelled_shutdown_jobs(self):
+        """Cancelled jobs during service shutdown should not log noisy tracebacks."""
+        import asyncio
+        from app.scheduler import _job_error_handler
+
+        mock_event = mock.MagicMock()
+        mock_event.exception = asyncio.CancelledError()
+        mock_event.job_id = "auto_buy_monitor"
+        mock_event.traceback = "cancelled while shutting down"
+
+        with mock.patch("app.scheduler.logger") as mock_logger:
+            _job_error_handler(mock_event)
+            mock_logger.error.assert_not_called()
+            mock_logger.debug.assert_called_once()

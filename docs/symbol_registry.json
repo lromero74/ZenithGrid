@@ -1733,8 +1733,10 @@
   "backend/app/position_routers/position_query_router.py": {
     "classes": {},
     "functions": [
+      "_get_page_summary_cache_key",
       "_trim_open_list_optional_fields",
       "_trim_strategy_snapshot_for_list",
+      "clear_positions_summary_cache",
       "get_completed_trades_stats",
       "get_pnl_timeseries",
       "get_position",

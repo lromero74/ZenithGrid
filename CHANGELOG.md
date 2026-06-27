@@ -5,6 +5,11 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v3.13.16] - 2026-06-26
+
+### Fixed
+- **More no-infrastructure performance cleanup.** The Active Deals page summary now uses a short user/account-scoped cache so repeated refreshes and tab focus events do not immediately redo completed-stats, realized-P&L, and balances work. Coinbase public product lookup now resolves USD-equivalent stable pairs locally, avoiding noisy `USDC-USD` product probes. Scheduler cancellations during service restart are treated as normal shutdown noise instead of emitting broken tracebacks.
+
 ## [v3.13.15] - 2026-06-26
 
 ### Changed

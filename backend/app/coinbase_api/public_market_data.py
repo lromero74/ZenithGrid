@@ -171,6 +171,17 @@ async def bulk_prices_for_products(product_ids: List[str]) -> Dict[str, float]:
 
 async def get_product(product_id: str) -> Dict[str, Any]:
     """Fetch product details (no cache — lightweight call)."""
+    stable_price = get_usd_equivalent_pair_price(product_id)
+    if stable_price is not None:
+        base, quote = product_id.split("-", 1)
+        return {
+            "product_id": product_id,
+            "base_currency_id": base,
+            "quote_currency_id": quote,
+            "price": str(stable_price),
+            "status": "online",
+            "trading_disabled": True,
+        }
     return await _public_request(f"/api/v3/brokerage/market/products/{product_id}")
 
 
