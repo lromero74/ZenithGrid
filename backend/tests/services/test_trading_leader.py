@@ -37,6 +37,30 @@ async def test_leader_lease_fails_closed_when_another_process_holds_it():
 
 
 @pytest.mark.asyncio
+async def test_leader_lease_fails_closed_when_renewal_errors_past_ttl():
+    """A Redis error during renewal must not silently kill the renew task — once
+    the lease can no longer have been renewed within its TTL, fail closed."""
+    from app.services.trading_leader import TradingLeaderLease
+
+    redis = AsyncMock()
+    redis.set.return_value = True
+    redis.eval.side_effect = ConnectionError("redis unreachable")
+    fatal = AsyncMock()
+    lease = TradingLeaderLease(
+        redis,
+        token="leader-err",
+        renew_interval_seconds=0,
+        ttl_seconds=0,  # any elapsed >= ttl → fail closed immediately
+        on_lease_lost=fatal,
+    )
+
+    await lease.acquire()
+    await lease.wait_until_stopped()
+
+    fatal.assert_awaited_once()
+
+
+@pytest.mark.asyncio
 async def test_leader_lease_invokes_fatal_callback_if_renewal_is_lost():
     from app.services.trading_leader import TradingLeaderLease
 
