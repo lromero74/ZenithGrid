@@ -216,8 +216,7 @@ export function useTTSSync(options: UseTTSSyncOptions = {}): UseTTSSyncReturn {
     audio.volume = volume
     // playsInline: allow in-page (non-fullscreen) playback on iOS, which is
     // required for Media Session background audio to work correctly.
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    ;(audio as any).playsInline = true
+    ;(audio as HTMLMediaElement & { playsInline?: boolean }).playsInline = true
     audioRef.current = audio
 
     audio.onplay = () => {

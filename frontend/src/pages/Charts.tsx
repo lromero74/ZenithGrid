@@ -115,8 +115,7 @@ function Charts() {
 
       if (mainSeriesRef.current && volumeSeriesRef.current && !isCleanedUpRef.current) {
         try {
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          mainSeriesRef.current.setData(priceData as any)
+          mainSeriesRef.current.setData(priceData)
           volumeSeriesRef.current.setData(volumeData)
 
           // Render indicators with the new candle data

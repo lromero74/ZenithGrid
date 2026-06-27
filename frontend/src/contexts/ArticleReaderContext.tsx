@@ -149,8 +149,7 @@ export function ArticleReaderProvider({ children }: ArticleReaderProviderProps) 
   const playlistRef = useRef<ArticleItem[]>([])
   const continuousPlayRef = useRef(true)
   const hasPlaybackStartedRef = useRef(false)  // Track if audio ever started for current article
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const wakeLockRef = useRef<any>(null)
+  const wakeLockRef = useRef<WakeLockSentinel | null>(null)
   const keepaliveAudioRef = useRef<HTMLAudioElement | null>(null)
   const autoResumeTriggeredRef = useRef(false)
   const prefetchAbortRef = useRef<AbortController | null>(null)
@@ -412,8 +411,7 @@ export function ArticleReaderProvider({ children }: ArticleReaderProviderProps) 
   const acquireWakeLock = useCallback(async () => {
     try {
       if ('wakeLock' in navigator && !wakeLockRef.current) {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        wakeLockRef.current = await (navigator as any).wakeLock.request('screen')
+        wakeLockRef.current = await navigator.wakeLock.request('screen')
         wakeLockRef.current?.addEventListener('release', () => {
           wakeLockRef.current = null
         })

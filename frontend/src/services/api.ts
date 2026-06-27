@@ -11,6 +11,7 @@ import type {
   Bot,
   BotCreate,
   BotStats,
+  StrategyConfig,
   StrategyDefinition,
   OrderHistory,
   AIBotLog,
@@ -500,7 +501,19 @@ export interface IndicatorLogEntry extends BotLogEntry {
 export interface BotTemplate {
   id?: number;
   name?: string;
+  description?: string;
+  is_default?: boolean;
   strategy_type?: string;
+  market_type?: 'spot' | 'perps';
+  product_id?: string;
+  product_ids?: string[];
+  split_budget_across_pairs?: boolean;
+  reserved_btc_balance?: number;
+  reserved_usd_balance?: number;
+  budget_percentage?: number;
+  check_interval_seconds?: number;
+  strategy_config?: StrategyConfig;
+  exchange_type?: 'cex' | 'dex';
   config?: Record<string, unknown>;
   [key: string]: unknown;
 }

@@ -3,6 +3,7 @@
 // `UseMutationResult` object (with isPending, etc.) is assignable to this.
 export interface MutationLike<TVars = void> {
   mutate: (variables: TVars) => void;
+  isPending?: boolean;
 }
 
 // Bot strategy configuration. Stored backend-side as an open JSON dict, so the
@@ -426,6 +427,15 @@ export interface BotCreate {
   strategy_type: string;
   strategy_config: StrategyConfig;
   product_id: string;
+  product_ids?: string[];
+  split_budget_across_pairs?: boolean;
+  account_id?: number | null;
+  check_interval_seconds?: number;
+  exchange_type?: 'cex' | 'dex';
+  chain_id?: number;
+  dex_router?: string;
+  wallet_private_key?: string;
+  rpc_url?: string;
   reserved_btc_balance?: number;
   reserved_usd_balance?: number;
   budget_percentage?: number;

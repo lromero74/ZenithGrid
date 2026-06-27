@@ -1,7 +1,7 @@
 import { useRef, useState, useEffect } from 'react'
 import { isCanceledRequest } from '../../utils/apiError'
 import { useQuery } from '@tanstack/react-query'
-import { createChart, ColorType, IChartApi, ISeriesApi, Time, LineStyle } from 'lightweight-charts'
+import { createChart, ColorType, IChartApi, ISeriesApi, SeriesType, SeriesMarker, Time, LineStyle } from 'lightweight-charts'
 import { api } from '../../services/api'
 import {
   BarChart3,
@@ -20,7 +20,8 @@ import {
   TIME_INTERVALS,
   type CandleData
 } from '../../utils/indicators'
-import type { Position, Trade } from '../../types'
+import type { Position, Trade, StrategyConfig } from '../../types'
+import type { IndicatorSettings } from '../../utils/indicators/types'
 import {
   getTakeProfitPercent,
   getFeeAdjustedProfitMultiplier,
@@ -45,15 +46,11 @@ interface DealChartProps {
 export function DealChart({ position, productId: initialProductId, currentPrice, trades }: DealChartProps) {
   const chartContainerRef = useRef<HTMLDivElement>(null)
   const chartRef = useRef<IChartApi | null>(null)
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const mainSeriesRef = useRef<ISeriesApi<any> | null>(null)
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const indicatorSeriesRef = useRef<Map<string, ISeriesApi<any>[]>>(new Map())
+  const mainSeriesRef = useRef<ISeriesApi<SeriesType> | null>(null)
+  const indicatorSeriesRef = useRef<Map<string, ISeriesApi<SeriesType>[]>>(new Map())
   const indicatorChartsRef = useRef<Map<string, IChartApi>>(new Map())
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const positionLinesRef = useRef<ISeriesApi<any>[]>([])
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const soPriceLinesRef = useRef<ReturnType<ISeriesApi<any>['createPriceLine']>[]>([])
+  const positionLinesRef = useRef<ISeriesApi<SeriesType>[]>([])
+  const soPriceLinesRef = useRef<ReturnType<ISeriesApi<SeriesType>['createPriceLine']>[]>([])
   const candleDataRef = useRef<CandleData[]>([])
   const isCleanedUpRef = useRef<boolean>(false)
   const lastUpdateRef = useRef<string>('')
@@ -100,8 +97,7 @@ export function DealChart({ position, productId: initialProductId, currentPrice,
     queryFn: async () => {
       if (!position.bot_id) return []
       const botData = await botsApi.getById(position.bot_id)
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      return (botData as any).pairs || []
+      return (botData as { pairs?: string[] }).pairs || []
     },
     enabled: !!position.bot_id,
   })
@@ -360,8 +356,7 @@ export function DealChart({ position, productId: initialProductId, currentPrice,
   }
 
   // Update indicator settings
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const updateIndicatorSettings = (indicatorId: string, newSettings: Record<string, any>) => {
+  const updateIndicatorSettings = (indicatorId: string, newSettings: IndicatorSettings) => {
     setIndicators(prev =>
       prev.map(ind =>
         ind.id === indicatorId ? { ...ind, settings: { ...ind.settings, ...newSettings } } : ind
@@ -406,8 +401,7 @@ export function DealChart({ position, productId: initialProductId, currentPrice,
         indicatorSeriesRef.current.delete(indicator.id)
       }
 
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const newSeries: ISeriesApi<any>[] = []
+      const newSeries: ISeriesApi<SeriesType>[] = []
 
       if (indicator.type === 'sma') {
         const smaValues = calculateSMA(closes, indicator.settings.period as number)
@@ -529,8 +523,7 @@ export function DealChart({ position, productId: initialProductId, currentPrice,
     })
 
     try {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      mainSeriesRef.current.setData(priceData as any)
+      mainSeriesRef.current.setData(priceData)
 
       // Render indicators
       if (indicators.length > 0) {
@@ -606,8 +599,7 @@ export function DealChart({ position, productId: initialProductId, currentPrice,
 
       // Use strategy_config_snapshot (frozen at open time) as primary source;
       // fall back to live bot config if snapshot is absent (very old positions).
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const cfgSnapshot: Record<string, any> = position.strategy_config_snapshot || bot?.strategy_config || {}
+      const cfgSnapshot: StrategyConfig = position.strategy_config_snapshot || bot?.strategy_config || {}
 
       // Stop Loss line — only when stop loss is actually configured
       if (position.status === 'open') {
@@ -707,8 +699,7 @@ export function DealChart({ position, productId: initialProductId, currentPrice,
 
       // Add markers
       if (chartType === 'candlestick' || chartType === 'bar') {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const markers: any[] = []
+        const markers: SeriesMarker<Time>[] = []
 
         // Current price marker
         if (chartData.length > 0) {

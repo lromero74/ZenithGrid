@@ -9,7 +9,7 @@ import type { RebalanceStatus } from '../../../services/api'
 interface StrategyConfigSectionProps {
   formData: BotFormData
   setFormData: (data: BotFormData) => void
-  selectedStrategy: StrategyDefinition
+  selectedStrategy: StrategyDefinition | undefined
   handleParamChange: (paramName: string, value: unknown) => void
   aggregateData?: AggregateValue
   rebalanceStatus?: RebalanceStatus
@@ -340,7 +340,7 @@ function StrategyParameterGroups({
 }: {
   formData: BotFormData
   setFormData: (data: BotFormData) => void
-  selectedStrategy: StrategyDefinition
+  selectedStrategy: StrategyDefinition | undefined
   handleParamChange: (name: string, value: unknown) => void
   renderParameterInput: (
     param: StrategyParameter
@@ -360,7 +360,7 @@ function StrategyParameterGroups({
 
   // Group parameters, excluding custom budget params
   const parametersByGroup =
-    selectedStrategy.parameters.reduce(
+    (selectedStrategy?.parameters ?? []).reduce(
       (
         acc: Record<string, StrategyParameter[]>,
         param: StrategyParameter
@@ -384,12 +384,12 @@ function StrategyParameterGroups({
     )
 
   const maxConcurrentDealsParam =
-    selectedStrategy.parameters.find(
+    selectedStrategy?.parameters.find(
       (p: StrategyParameter) =>
         p.name === 'max_concurrent_deals'
     )
   const maxSimSamePairParam =
-    selectedStrategy.parameters.find(
+    selectedStrategy?.parameters.find(
       (p: StrategyParameter) =>
         p.name === 'max_simultaneous_same_pair'
     )
@@ -419,7 +419,7 @@ function StrategyParameterGroups({
 
   const isNonAIStrategy =
     formData.strategy_type === 'bull_flag' ||
-    !selectedStrategy.parameters.some(
+    !selectedStrategy?.parameters.some(
       (p: StrategyParameter) =>
         p.group === 'AI Configuration'
     )

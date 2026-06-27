@@ -65,8 +65,7 @@ beforeEach(() => {
   localStorage.clear()
   vi.restoreAllMocks()
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  vi.stubGlobal('Audio', function (this: any) {
+  vi.stubGlobal('Audio', function (this: unknown) {
     return createMockAudio()
   })
   vi.stubGlobal('requestAnimationFrame', vi.fn(() => 1))
