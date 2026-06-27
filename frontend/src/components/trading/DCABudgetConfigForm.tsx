@@ -90,7 +90,7 @@ function DCABudgetConfigForm({
     }
   }, [])
 
-  const updateConfig = (key: string, value: any) => {
+  const updateConfig = (key: string, value: unknown) => {
     onChange({ ...config, [key]: value })
   }
 
@@ -419,7 +419,7 @@ function DCABudgetConfigForm({
                 type="number"
                 value={config.base_order_percentage === '' || config.base_order_percentage == null ? '' : config.base_order_percentage}
                 onChange={(e) => {
-                  if (e.target.value === '') { updateConfig('base_order_percentage', '' as any); return }
+                  if (e.target.value === '') { updateConfig('base_order_percentage', ''); return }
                   const v = safeParseFloat(e.target.value)
                   if (v !== undefined) updateConfig('base_order_percentage', v)
                 }}
@@ -463,7 +463,7 @@ function DCABudgetConfigForm({
                 value={getBaseOrderSize() === '' || getBaseOrderSize() == null ? '' : getBaseOrderSize()}
                 onChange={(e) => {
                   if (e.target.value === '') {
-                    updateConfig(baseOrderKey, '' as any)
+                    updateConfig(baseOrderKey, '')
                     updateConfig('quote_currency', quoteCurrency)
                     return
                   }
@@ -632,7 +632,7 @@ function DCABudgetConfigForm({
                 type="number"
                 value={config.safety_order_percentage === '' || config.safety_order_percentage == null ? '' : config.safety_order_percentage}
                 onChange={(e) => {
-                  if (e.target.value === '') { updateConfig('safety_order_percentage', '' as any); return }
+                  if (e.target.value === '') { updateConfig('safety_order_percentage', ''); return }
                   const v = safeParseFloat(e.target.value)
                   if (v !== undefined) updateConfig('safety_order_percentage', v)
                 }}
@@ -675,7 +675,7 @@ function DCABudgetConfigForm({
                 type="number"
                 value={getSafetyOrderSize() === '' || getSafetyOrderSize() == null ? '' : getSafetyOrderSize()}
                 onChange={(e) => {
-                  if (e.target.value === '') { updateConfig(safetyOrderKey, '' as any); return }
+                  if (e.target.value === '') { updateConfig(safetyOrderKey, ''); return }
                   const v = safeParseFloat(e.target.value)
                   if (v !== undefined) updateConfig(safetyOrderKey, v)
                 }}
