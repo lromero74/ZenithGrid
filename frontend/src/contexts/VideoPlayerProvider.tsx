@@ -3,7 +3,7 @@
  * background listening, and supplies it via VideoPlayerContext.
  */
 
-import { useState, useCallback, useRef, useEffect, ReactNode } from 'react'
+import { useState, useCallback, useRef, useEffect, useMemo, ReactNode } from 'react'
 import { registerVideoPlayer, stopArticleReader } from './mediaCoordinator'
 import { authFetch } from '../services/api'
 import { VideoPlayerContext, VideoItem, VideoPlayerContextType } from './VideoPlayerContext'
@@ -166,7 +166,7 @@ export function VideoPlayerProvider({ children }: VideoPlayerProviderProps) {
     return () => window.removeEventListener('message', handleMessage)
   }, [isPlaying, nextVideo, currentIndex])
 
-  const value: VideoPlayerContextType = {
+  const value: VideoPlayerContextType = useMemo(() => ({
     playlist,
     currentIndex,
     isPlaying,
@@ -181,7 +181,11 @@ export function VideoPlayerProvider({ children }: VideoPlayerProviderProps) {
     closeMiniPlayer,
     setExpanded: setIsExpanded,
     currentVideo,
-  }
+  }), [
+    playlist, currentIndex, isPlaying, showMiniPlayer, isExpanded,
+    startPlaylist, stopPlaylist, playVideo, nextVideo, previousVideo,
+    toggleMiniPlayer, closeMiniPlayer, currentVideo,
+  ])
 
   return (
     <VideoPlayerContext.Provider value={value}>

@@ -170,8 +170,8 @@ function AppContent() {
 
   // Fetch closed positions to count history items (deferred)
   const { data: closedPositions = [] } = useQuery({
-    queryKey: ['closed-positions-badge'],
-    queryFn: () => positionsApi.getAll('closed', 100),
+    queryKey: ['closed-positions-badge', selectedAccount?.id],
+    queryFn: () => positionsApi.getAll('closed', 100, selectedAccount?.id),
     refetchInterval: 60000,
     enabled: deferredQueriesEnabled,
   })
