@@ -313,3 +313,91 @@ class TestSafetyOrderQueryScope:
 
         # Only the open-position safety order should have been polled
         assert queried_order_ids == ["safety-open"]
+
+    @pytest.mark.asyncio
+    async def test_scoped_path_polls_exchange_after_read_session_exits(self):
+        """Session-scoped safety monitor closes the snapshot transaction before exchange polling."""
+        from app.services import safety_order_monitor as som
+
+        state = {"read_exited": False}
+
+        class SessionCtx:
+            def __init__(self, session, *, mark_read=False):
+                self.session = session
+                self.mark_read = mark_read
+
+            async def __aenter__(self):
+                return self.session
+
+            async def __aexit__(self, *_args):
+                if self.mark_read:
+                    state["read_exited"] = True
+                return False
+
+        snapshot_result = MagicMock()
+        snapshot_result.all.return_value = [(7, 1, 10, "safety-open", 0.3, 48000.0)]
+        read_session = MagicMock()
+        read_session.execute = AsyncMock(return_value=snapshot_result)
+        client_session = MagicMock()
+        sessions = [SessionCtx(read_session, mark_read=True), SessionCtx(client_session)]
+
+        def session_maker():
+            return sessions.pop(0)
+
+        exchange = AsyncMock()
+
+        async def _get_order(order_id):
+            assert state["read_exited"] is True
+            return {"status": "OPEN", "filled_size": "0", "filled_value": "0"}
+
+        exchange.get_order = AsyncMock(side_effect=_get_order)
+
+        with __import__("unittest").mock.patch.object(
+            som, "get_exchange_client_for_account", AsyncMock(return_value=exchange)
+        ), __import__("unittest").mock.patch.object(
+            som, "_apply_polled_safety_order", AsyncMock()
+        ) as apply_polled:
+            await som.check_all_pending_safety_orders(session_maker=session_maker)
+
+        exchange.get_order.assert_awaited_once_with("safety-open")
+        apply_polled.assert_awaited_once()
+        assert sessions == []
+
+    @pytest.mark.asyncio
+    async def test_apply_polled_safety_order_refreshes_paper_exchange_in_write_session(self):
+        """Paper clients hold DB session refs, so write phase must re-resolve them."""
+        from app.services import safety_order_monitor as som
+
+        snapshot = som.PendingSafetyOrderSnapshot(
+            pending_order_id=7, position_id=1, account_id=10,
+            order_id="paper-safety", base_amount=0.3, limit_price=48000.0,
+        )
+        pending_order = _pending("BUY", id=7, order_id="paper-safety")
+        position = _long_position(id=1)
+        row_result = MagicMock()
+        row_result.first.return_value = (pending_order, position)
+        write_session = MagicMock()
+        write_session.execute = AsyncMock(return_value=row_result)
+
+        class SessionCtx:
+            async def __aenter__(self):
+                return write_session
+
+            async def __aexit__(self, *_args):
+                return False
+
+        paper_exchange = MagicMock()
+        paper_exchange.is_paper_trading = MagicMock(return_value=True)
+        refreshed_exchange = MagicMock()
+
+        with __import__("unittest").mock.patch.object(
+            som, "get_exchange_client_for_account", AsyncMock(return_value=refreshed_exchange),
+        ) as get_client, __import__("unittest").mock.patch.object(
+            som.SafetyOrderMonitor, "process_pending_safety_order", AsyncMock(),
+        ):
+            await som._apply_polled_safety_order(
+                lambda: SessionCtx(), snapshot, paper_exchange,
+                {"status": "FILLED", "filled_size": "0.3", "filled_value": "14400.0"},
+            )
+
+        get_client.assert_awaited_once_with(write_session, 10)

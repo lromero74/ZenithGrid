@@ -10,7 +10,8 @@ Exchange-agnostic: works with any ExchangeClient implementation
 
 import logging
 from app.utils.timeutil import utcnow
-from typing import Dict, Optional
+from dataclasses import dataclass
+from typing import Any, Dict, Optional
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -24,14 +25,138 @@ from app.services.websocket_manager import OrderFillEvent
 from app.services.broadcast_backend import broadcast_backend
 
 logger = logging.getLogger(__name__)
+_PREFETCH_NOT_PROVIDED = object()
 
 
-async def check_all_pending_limit_orders(db: AsyncSession) -> None:
+@dataclass(frozen=True)
+class PendingLimitOrderSnapshot:
+    position_id: int
+    account_id: int
+    order_id: str
+    base_amount: Optional[float]
+    limit_price: Optional[float]
+
+
+async def _snapshot_pending_limit_orders(db: AsyncSession) -> list[PendingLimitOrderSnapshot]:
+    result = await db.execute(
+        select(
+            Position.id,
+            Position.account_id,
+            Position.limit_close_order_id,
+            PendingOrder.base_amount,
+            PendingOrder.limit_price,
+        )
+        .join(
+            PendingOrder,
+            (PendingOrder.order_id == Position.limit_close_order_id)
+            & (PendingOrder.position_id == Position.id),
+        )
+        .where(
+            Position.closing_via_limit.is_(True),
+            Position.limit_close_order_id.isnot(None),
+            Position.status == "open",
+        )
+    )
+    snapshots: list[PendingLimitOrderSnapshot] = []
+    for position_id, account_id, order_id, base_amount, limit_price in result.all():
+        if account_id and order_id:
+            snapshots.append(PendingLimitOrderSnapshot(
+                position_id=position_id,
+                account_id=account_id,
+                order_id=order_id,
+                base_amount=base_amount,
+                limit_price=limit_price,
+            ))
+    return snapshots
+
+
+async def _poll_limit_order_without_db(exchange: ExchangeClient, snapshot: PendingLimitOrderSnapshot) -> Optional[dict]:
+    if snapshot.order_id.startswith("paper-"):
+        fill_size = snapshot.base_amount or 0.0
+        fill_value = (snapshot.limit_price or 0.0) * fill_size
+        return {
+            "status": "FILLED",
+            "filled_size": str(fill_size),
+            "filled_value": str(fill_value),
+        }
+    return await exchange.get_order(snapshot.order_id)
+
+
+async def _apply_polled_limit_order(
+    session_maker,
+    snapshot: PendingLimitOrderSnapshot,
+    exchange: ExchangeClient,
+    order_data: Optional[dict],
+) -> None:
+    async with session_maker() as db:
+        result = await db.execute(
+            select(Position).where(
+                Position.id == snapshot.position_id,
+                Position.status == "open",
+                Position.limit_close_order_id == snapshot.order_id,
+            )
+        )
+        position = result.scalar_one_or_none()
+        if not position:
+            logger.info(
+                "Position %s no longer needs limit-order monitoring; skipping %s",
+                snapshot.position_id, snapshot.order_id,
+            )
+            return
+        apply_exchange = exchange
+        is_paper = False
+        if hasattr(exchange, "is_paper_trading") and callable(exchange.is_paper_trading):
+            is_paper = exchange.is_paper_trading() is True
+        if is_paper:
+            refreshed = await get_exchange_client_for_account(db, snapshot.account_id)
+            if refreshed:
+                apply_exchange = refreshed
+        monitor = LimitOrderMonitor(db, apply_exchange)
+        await monitor.check_single_position_limit_order(position, pre_fetched_order_data=order_data)
+
+
+async def _check_all_pending_limit_orders_scoped(session_maker) -> None:
+    async with session_maker() as db:
+        snapshots = await _snapshot_pending_limit_orders(db)
+
+    snapshots_by_account: Dict[int, list[PendingLimitOrderSnapshot]] = {}
+    for snapshot in snapshots:
+        snapshots_by_account.setdefault(snapshot.account_id, []).append(snapshot)
+
+    for account_id, account_snapshots in snapshots_by_account.items():
+        async with session_maker() as db:
+            exchange = await get_exchange_client_for_account(db, account_id)
+        if not exchange:
+            logger.warning(
+                f"No exchange client for account {account_id}; "
+                f"skipping {len(account_snapshots)} pending limit order(s) this cycle"
+            )
+            continue
+        for snapshot in account_snapshots:
+            try:
+                order_data = await _poll_limit_order_without_db(exchange, snapshot)
+                await _apply_polled_limit_order(session_maker, snapshot, exchange, order_data)
+            except Exception as e:
+                logger.error(
+                    "Error checking limit order %s for position %s: %s",
+                    snapshot.order_id, snapshot.position_id, e, exc_info=True,
+                )
+
+
+async def check_all_pending_limit_orders(db: Optional[AsyncSession] = None, *, session_maker=None) -> None:
     """Check every position with a pending limit close order.
 
     Groups positions by account so the exchange client is resolved once per
     account instead of once per position.
     """
+    if session_maker is not None:
+        await _check_all_pending_limit_orders_scoped(session_maker)
+        return
+    if db is None:
+        from app.database import async_session_maker
+        await _check_all_pending_limit_orders_scoped(async_session_maker)
+        return
+
     result = await db.execute(
         select(Position).where(
             Position.closing_via_limit.is_(True),
@@ -79,7 +204,9 @@ class LimitOrderMonitor:
             self._bot_name_cache[bot_id] = result.scalars().first()
         return self._bot_name_cache[bot_id]
 
-    async def check_single_position_limit_order(self, position: Position):
+    async def check_single_position_limit_order(
+        self, position: Position, pre_fetched_order_data: Any = _PREFETCH_NOT_PROVIDED,
+    ):
         """Check a single position's limit order status"""
         try:
             if not position.limit_close_order_id:
@@ -116,8 +243,12 @@ class LimitOrderMonitor:
                 await self._process_order_completion(position, pending_order, synthetic_order_data, "FILLED")
                 return
 
-            # Fetch order status from exchange
-            order_data = await self.exchange.get_order(position.limit_close_order_id)
+            # Fetch order status from exchange unless the session-scoped monitor
+            # already polled it outside the DB transaction.
+            if pre_fetched_order_data is _PREFETCH_NOT_PROVIDED:
+                order_data = await self.exchange.get_order(position.limit_close_order_id)
+            else:
+                order_data = pre_fetched_order_data
 
             if not order_data:
                 logger.warning(f"Could not fetch order data for {position.limit_close_order_id}")

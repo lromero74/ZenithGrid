@@ -149,6 +149,89 @@ class TestCheckAllPendingLimitOrders:
         checked = check_one.await_args_list[0].args[0]
         assert checked.id == 2
 
+    @pytest.mark.asyncio
+    async def test_scoped_path_polls_exchange_after_read_session_exits(self):
+        """Session-scoped path closes the snapshot transaction before polling exchange."""
+        from app.services import limit_order_monitor as lom
+        from app.services.limit_order_monitor import check_all_pending_limit_orders
+
+        state = {"read_exited": False}
+
+        class SessionCtx:
+            def __init__(self, session, *, mark_read=False):
+                self.session = session
+                self.mark_read = mark_read
+
+            async def __aenter__(self):
+                return self.session
+
+            async def __aexit__(self, *_args):
+                if self.mark_read:
+                    state["read_exited"] = True
+                return False
+
+        snapshot_result = MagicMock()
+        snapshot_result.all.return_value = [(1, 10, "order-abc", 5.0, 0.002)]
+        read_session = MagicMock()
+        read_session.execute = AsyncMock(return_value=snapshot_result)
+        client_session = MagicMock()
+        sessions = [SessionCtx(read_session, mark_read=True), SessionCtx(client_session)]
+
+        def session_maker():
+            return sessions.pop(0)
+
+        exchange = AsyncMock()
+
+        async def _get_order(order_id):
+            assert state["read_exited"] is True
+            return {"status": "OPEN", "filled_size": "0", "filled_value": "0"}
+
+        exchange.get_order = AsyncMock(side_effect=_get_order)
+
+        with patch.object(lom, "get_exchange_client_for_account", AsyncMock(return_value=exchange)), \
+             patch.object(lom, "_apply_polled_limit_order", new_callable=AsyncMock) as apply_polled:
+            await check_all_pending_limit_orders(session_maker=session_maker)
+
+        exchange.get_order.assert_awaited_once_with("order-abc")
+        apply_polled.assert_awaited_once()
+        assert sessions == []
+
+    @pytest.mark.asyncio
+    async def test_apply_polled_limit_order_refreshes_paper_exchange_in_write_session(self):
+        """Paper clients hold DB session refs, so write phase must re-resolve them."""
+        from app.services import limit_order_monitor as lom
+
+        snapshot = lom.PendingLimitOrderSnapshot(
+            position_id=1, account_id=10, order_id="paper-abc", base_amount=5.0, limit_price=0.002,
+        )
+        position_result = MagicMock()
+        position_result.scalar_one_or_none.return_value = _make_position(id=1, account_id=10)
+        write_session = MagicMock()
+        write_session.execute = AsyncMock(return_value=position_result)
+
+        class SessionCtx:
+            async def __aenter__(self):
+                return write_session
+
+            async def __aexit__(self, *_args):
+                return False
+
+        paper_exchange = MagicMock()
+        paper_exchange.is_paper_trading = MagicMock(return_value=True)
+        refreshed_exchange = MagicMock()
+
+        with patch.object(
+            lom, "get_exchange_client_for_account", AsyncMock(return_value=refreshed_exchange),
+        ) as get_client, patch.object(
+            LimitOrderMonitor, "check_single_position_limit_order", new_callable=AsyncMock,
+        ):
+            await lom._apply_polled_limit_order(
+                lambda: SessionCtx(), snapshot, paper_exchange,
+                {"status": "FILLED", "filled_size": "5.0", "filled_value": "0.01"},
+            )
+
+        get_client.assert_awaited_once_with(write_session, 10)
+
 
 # ---------------------------------------------------------------------------
 # _get_bot_name cache tests

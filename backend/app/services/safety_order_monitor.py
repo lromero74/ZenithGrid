@@ -15,7 +15,8 @@ correctly and re-runs never double-apply.
 """
 
 import logging
-from typing import Dict, List, Tuple
+from dataclasses import dataclass
+from typing import Any, Dict, List, Tuple
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -25,6 +26,7 @@ from app.services.exchange_service import get_exchange_client_for_account
 from app.utils.timeutil import utcnow
 
 logger = logging.getLogger(__name__)
+_PREFETCH_NOT_PROVIDED = object()
 
 # trade_type prefix that marks a PendingOrder as a DCA safety ADD (not a close).
 SAFETY_TRADE_TYPE_PREFIX = "safety_order"
@@ -33,10 +35,134 @@ _TERMINAL_CANCEL_STATUSES = {"CANCELLED", "CANCELED", "EXPIRED", "FAILED"}
 _FILL_PROGRESS_STATUSES = {"FILLED", "OPEN", "PENDING", "PARTIALLY_FILLED"}
 
 
-async def check_all_pending_safety_orders(db: AsyncSession) -> None:
+@dataclass(frozen=True)
+class PendingSafetyOrderSnapshot:
+    pending_order_id: int
+    position_id: int
+    account_id: int
+    order_id: str
+    base_amount: float
+    limit_price: float
+
+
+async def _snapshot_pending_safety_orders(db: AsyncSession) -> list[PendingSafetyOrderSnapshot]:
+    result = await db.execute(
+        select(
+            PendingOrder.id,
+            Position.id,
+            Position.account_id,
+            PendingOrder.order_id,
+            PendingOrder.base_amount,
+            PendingOrder.limit_price,
+        )
+        .join(Position, PendingOrder.position_id == Position.id)
+        .where(
+            PendingOrder.status.in_(["pending", "partially_filled"]),
+            PendingOrder.trade_type.like(f"{SAFETY_TRADE_TYPE_PREFIX}%"),
+            Position.status == "open",
+        )
+    )
+    snapshots: list[PendingSafetyOrderSnapshot] = []
+    for pending_id, position_id, account_id, order_id, base_amount, limit_price in result.all():
+        if account_id and order_id:
+            snapshots.append(PendingSafetyOrderSnapshot(
+                pending_order_id=pending_id,
+                position_id=position_id,
+                account_id=account_id,
+                order_id=order_id,
+                base_amount=base_amount or 0.0,
+                limit_price=limit_price or 0.0,
+            ))
+    return snapshots
+
+
+async def _poll_safety_order_without_db(exchange, snapshot: PendingSafetyOrderSnapshot) -> dict:
+    if snapshot.order_id.startswith("paper-"):
+        fill_size = snapshot.base_amount or 0.0
+        return {
+            "status": "FILLED",
+            "filled_size": str(fill_size),
+            "filled_value": str((snapshot.limit_price or 0.0) * fill_size),
+        }
+    return await exchange.get_order(snapshot.order_id)
+
+
+async def _apply_polled_safety_order(session_maker, snapshot: PendingSafetyOrderSnapshot, exchange, order_data) -> None:
+    async with session_maker() as db:
+        result = await db.execute(
+            select(PendingOrder, Position)
+            .join(Position, PendingOrder.position_id == Position.id)
+            .where(
+                PendingOrder.id == snapshot.pending_order_id,
+                PendingOrder.status.in_(["pending", "partially_filled"]),
+                Position.id == snapshot.position_id,
+                Position.status == "open",
+            )
+        )
+        row = result.first()
+        if not row:
+            logger.info(
+                "Safety order %s no longer needs monitoring; skipping",
+                snapshot.order_id,
+            )
+            return
+        pending_order, position = row
+        apply_exchange = exchange
+        is_paper = False
+        if hasattr(exchange, "is_paper_trading") and callable(exchange.is_paper_trading):
+            is_paper = exchange.is_paper_trading() is True
+        if is_paper:
+            refreshed = await get_exchange_client_for_account(db, snapshot.account_id)
+            if refreshed:
+                apply_exchange = refreshed
+        monitor = SafetyOrderMonitor(db, apply_exchange)
+        await monitor.process_pending_safety_order(pending_order, position, pre_fetched_order_data=order_data)
+
+
+async def _check_all_pending_safety_orders_scoped(session_maker) -> None:
+    async with session_maker() as db:
+        snapshots = await _snapshot_pending_safety_orders(db)
+
+    by_account: Dict[int, List[PendingSafetyOrderSnapshot]] = {}
+    for snapshot in snapshots:
+        by_account.setdefault(snapshot.account_id, []).append(snapshot)
+
+    for account_id, items in by_account.items():
+        try:
+            async with session_maker() as db:
+                exchange = await get_exchange_client_for_account(db, account_id)
+            if not exchange:
+                logger.warning(
+                    f"No exchange client for account {account_id}; "
+                    f"skipping {len(items)} pending safety order(s) this cycle"
+                )
+                continue
+            for snapshot in items:
+                try:
+                    order_data = await _poll_safety_order_without_db(exchange, snapshot)
+                    await _apply_polled_safety_order(session_maker, snapshot, exchange, order_data)
+                except Exception as e:
+                    logger.error(
+                        f"Error reconciling safety order {snapshot.order_id} "
+                        f"for account {account_id}: {e}",
+                        exc_info=True,
+                    )
+        except Exception as e:
+            logger.error(f"Error reconciling safety orders for account {account_id}: {e}")
+
+
+async def check_all_pending_safety_orders(db: AsyncSession = None, *, session_maker=None) -> None:
     """Find open positions with pending/partially-filled safety limit orders and
     reconcile any new fills into the position. Resolves the exchange client once
     per account (mirrors ``check_all_pending_limit_orders``)."""
+    if session_maker is not None:
+        await _check_all_pending_safety_orders_scoped(session_maker)
+        return
+    if db is None:
+        from app.database import async_session_maker
+        await _check_all_pending_safety_orders_scoped(async_session_maker)
+        return
+
     result = await db.execute(
         select(PendingOrder, Position)
         .join(Position, PendingOrder.position_id == Position.id)
@@ -84,18 +210,25 @@ class SafetyOrderMonitor:
         self.db = db
         self.exchange = exchange
 
-    async def process_pending_safety_order(self, pending_order: PendingOrder, position: Position) -> None:
+    async def process_pending_safety_order(
+        self, pending_order: PendingOrder, position: Position, pre_fetched_order_data: Any = _PREFETCH_NOT_PROVIDED,
+    ) -> None:
         try:
             # Paper orders fill instantly; synthesize fill data rather than
             # querying the exchange (mirrors limit_order_monitor's handling).
-            if pending_order.order_id and pending_order.order_id.startswith("paper-"):
+            if pre_fetched_order_data is _PREFETCH_NOT_PROVIDED:
+                order_data = None
+            else:
+                order_data = pre_fetched_order_data
+
+            if order_data is None and pending_order.order_id and pending_order.order_id.startswith("paper-"):
                 fill_size = pending_order.base_amount or 0.0
                 order_data = {
                     "status": "FILLED",
                     "filled_size": str(fill_size),
                     "filled_value": str((pending_order.limit_price or 0.0) * fill_size),
                 }
-            else:
+            elif order_data is None and pre_fetched_order_data is _PREFETCH_NOT_PROVIDED:
                 order_data = await self.exchange.get_order(pending_order.order_id)
 
             if not order_data:

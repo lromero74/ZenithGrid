@@ -5,6 +5,11 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v3.13.20] - 2026-06-26
+
+### Fixed
+- **Limit and safety order monitors no longer hold their parent database transaction while polling the exchange.** The real-time order monitor now snapshots pending order IDs in a short read session, closes that transaction, polls the exchange, then opens a short write session to apply fill/cancel updates. This trims another source of trader-side `idle in transaction` pressure without changing fill accounting.
+
 ## [v3.13.19] - 2026-06-26
 
 ### Fixed

@@ -329,20 +329,20 @@ async def run_limit_order_monitor():
 
     while True:
         try:
-            async with async_session_maker() as db:
-                # Check pending limit close orders (grouped by account so the
-                # exchange client is resolved once per account, not per position)
-                await check_all_pending_limit_orders(db)
+            # These monitors snapshot DB IDs, close the read transaction, poll
+            # the exchange, then reopen a short write session to apply changes.
+            await check_all_pending_limit_orders(session_maker=async_session_maker)
 
-                # Reconcile filled limit DCA *safety* orders as ADDs to their
-                # positions (long BUY adds + short SELL adds). Distinct from the
-                # close monitor above — must never close a position.
-                await check_all_pending_safety_orders(db)
+            # Reconcile filled limit DCA *safety* orders as ADDs to their
+            # positions (long BUY adds + short SELL adds). Distinct from the
+            # close monitor above — must never close a position.
+            await check_all_pending_safety_orders(session_maker=async_session_maker)
 
-                # Periodic orphaned record sweep (every ~5 minutes)
-                sweep_counter += 1
-                if sweep_counter >= SWEEP_INTERVAL:
-                    sweep_counter = 0
+            # Periodic orphaned record sweep (every ~5 minutes)
+            sweep_counter += 1
+            if sweep_counter >= SWEEP_INTERVAL:
+                sweep_counter = 0
+                async with async_session_maker() as db:
                     await sweep_orphaned_pending_orders(db)
         except Exception as e:
             if is_db_corruption_error(e):
