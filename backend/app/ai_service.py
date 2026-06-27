@@ -1,7 +1,7 @@
 """
 AI Service Module
 
-Provides a unified interface for accessing AI clients (Anthropic, OpenAI, Google Gemini).
+Provides a unified interface for accessing AI clients (Anthropic, OpenAI, Google Gemini, xAI Grok, Groq).
 Used by grid trading and other AI-powered features.
 """
 
@@ -18,7 +18,7 @@ async def get_ai_client(provider: str = "anthropic", user_id: Optional[int] = No
     Get an AI client for the specified provider.
 
     Args:
-        provider: AI provider name ("anthropic", "openai", or "gemini")
+        provider: AI provider name ("anthropic", "openai", "gemini", "grok", or "groq")
         user_id: Optional user ID to get user-specific API keys
         db: Optional database session for fetching user credentials
 
@@ -42,6 +42,8 @@ async def get_ai_client(provider: str = "anthropic", user_id: Optional[int] = No
                 "claude": "claude",
                 "openai": "openai",
                 "gemini": "gemini",
+                "grok": "grok",
+                "groq": "groq",
             }
             cred_provider = provider_map.get(provider, provider)
             api_key = await get_user_api_key(db, user_id, cred_provider)
@@ -57,6 +59,10 @@ async def get_ai_client(provider: str = "anthropic", user_id: Optional[int] = No
             api_key = settings.openai_api_key
         elif provider == "gemini":
             api_key = settings.gemini_api_key
+        elif provider == "grok":
+            api_key = settings.grok_api_key
+        elif provider == "groq":
+            api_key = settings.groq_api_key
 
     if not api_key:
         raise ValueError(f"No API key configured for provider: {provider}")
@@ -72,6 +78,12 @@ async def get_ai_client(provider: str = "anthropic", user_id: Optional[int] = No
         # Return a wrapper that creates per-request model instances
         # (avoids module-global genai.configure() race condition between users)
         return GeminiClientWrapper(api_key=api_key)
+    elif provider == "grok":
+        from openai import AsyncOpenAI
+        return AsyncOpenAI(api_key=api_key, base_url="https://api.x.ai/v1")
+    elif provider == "groq":
+        from openai import AsyncOpenAI
+        return AsyncOpenAI(api_key=api_key, base_url="https://api.groq.com/openai/v1")
     else:
         raise ValueError(f"Unsupported AI provider: {provider}")
 
@@ -110,7 +122,7 @@ async def get_ai_analysis(
 
     Args:
         client: AI client instance
-        provider: Provider name ("anthropic", "openai", or "gemini")
+        provider: Provider name ("anthropic", "openai", "gemini", "grok", or "groq")
         prompt: Analysis prompt
         model: Optional model name override
 
@@ -148,6 +160,28 @@ async def get_ai_analysis(
         model_instance = client.GenerativeModel(model)
         response = await model_instance.generate_content_async(prompt)
         return response.text
+
+    elif provider == "grok":
+        if not model:
+            model = "grok-3"
+
+        response = await client.chat.completions.create(
+            model=model,
+            messages=[{"role": "user", "content": prompt}],
+            max_tokens=2000,
+        )
+        return response.choices[0].message.content
+
+    elif provider == "groq":
+        if not model:
+            model = "llama-3.3-70b-versatile"
+
+        response = await client.chat.completions.create(
+            model=model,
+            messages=[{"role": "user", "content": prompt}],
+            max_tokens=2000,
+        )
+        return response.choices[0].message.content
 
     else:
         raise ValueError(f"Unsupported AI provider: {provider}")

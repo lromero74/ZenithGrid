@@ -9,11 +9,31 @@ Returns two tiers (simple, detailed) in a single AI call.
 
 import logging
 import re
-from typing import Any, Dict, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
 logger = logging.getLogger(__name__)
+
+REPORT_AI_PROVIDER_OPTIONS = [
+    {"value": "claude", "label": "Claude (Anthropic)", "credential_provider": "claude"},
+    {"value": "openai", "label": "OpenAI (GPT)", "credential_provider": "openai"},
+    {"value": "gemini", "label": "Google Gemini", "credential_provider": "gemini"},
+    {"value": "grok", "label": "xAI (Grok)", "credential_provider": "grok"},
+    {"value": "groq", "label": "Groq (Llama 3.3 70B)", "credential_provider": "groq"},
+]
+
+REPORT_AI_PROVIDER_VALUES = tuple(option["value"] for option in REPORT_AI_PROVIDER_OPTIONS)
+
+
+def get_report_ai_provider_options() -> List[Dict[str, str]]:
+    """Return report-summary provider options in preferred fallback order."""
+    return [dict(option) for option in REPORT_AI_PROVIDER_OPTIONS]
+
+
+def _client_provider_name(provider: str) -> str:
+    """Map report provider ids to the shared AI client provider ids."""
+    return "anthropic" if provider == "claude" else provider
 
 
 _AI_TRANSFER_LABELS = {
@@ -105,13 +125,19 @@ async def generate_report_summary(
         user_id: User ID for credential lookup
         report_data: The report metrics dict
         period_label: Human-readable period (e.g. "Jan 1 - Jan 7, 2026")
-        provider: Preferred AI provider (claude/openai/gemini), or None for first available
+        provider: Preferred AI provider, or None for first available
 
     Returns:
         Tuple of (tiered_summary_dict, provider_used) or (None, None) if no AI available.
         tiered_summary_dict has keys: simple, detailed
     """
-    all_providers = ["claude", "openai", "gemini"]
+    all_providers = list(REPORT_AI_PROVIDER_VALUES)
+    if provider:
+        provider = provider.lower()
+        if provider not in REPORT_AI_PROVIDER_VALUES:
+            logger.warning("Unsupported report AI provider requested: %s", provider)
+            provider = None
+
     if provider:
         # Try preferred provider first, then fall back to others
         providers_to_try = [provider] + [p for p in all_providers if p != provider]
@@ -123,7 +149,7 @@ async def generate_report_summary(
         try:
             from app.ai_service import get_ai_client
             client = await get_ai_client(
-                provider=prov if prov != "claude" else "anthropic",
+                provider=_client_provider_name(prov),
                 user_id=user_id,
                 db=db,
             )
@@ -592,7 +618,7 @@ async def _call_ai(client, provider: str, prompt: str) -> Optional[str]:
     """Call the appropriate AI provider and return the response text."""
     if provider in ("claude", "anthropic"):
         response = await client.messages.create(
-            model="claude-sonnet-4-20250514",
+            model="claude-sonnet-4-5-20250929",
             max_tokens=MAX_SUMMARY_TOKENS,
             system=_SYSTEM_MESSAGE,
             messages=[{"role": "user", "content": prompt}],
@@ -617,5 +643,27 @@ async def _call_ai(client, provider: str, prompt: str) -> Optional[str]:
         )
         response = await model_instance.generate_content_async(prompt)
         return response.text if response else None
+
+    elif provider == "grok":
+        response = await client.chat.completions.create(
+            model="grok-3",
+            max_tokens=MAX_SUMMARY_TOKENS,
+            messages=[
+                {"role": "system", "content": _SYSTEM_MESSAGE},
+                {"role": "user", "content": prompt},
+            ],
+        )
+        return response.choices[0].message.content if response.choices else None
+
+    elif provider == "groq":
+        response = await client.chat.completions.create(
+            model="llama-3.3-70b-versatile",
+            max_tokens=MAX_SUMMARY_TOKENS,
+            messages=[
+                {"role": "system", "content": _SYSTEM_MESSAGE},
+                {"role": "user", "content": prompt},
+            ],
+        )
+        return response.choices[0].message.content if response.choices else None
 
     return None

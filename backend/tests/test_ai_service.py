@@ -124,6 +124,36 @@ class TestGetAiClientCredentials:
         assert client.api_key == "user-gem-key"
 
     @pytest.mark.asyncio
+    async def test_grok_user_credential_maps_to_grok(self):
+        """xAI Grok provider maps to 'grok' in credential lookup."""
+        mock_db = AsyncMock()
+
+        with patch("app.services.ai_credential_service.get_user_api_key", new_callable=AsyncMock) as mock_get_key, \
+             patch("openai.AsyncOpenAI") as MockOpenAI:
+            mock_get_key.return_value = "user-grok-key"
+            MockOpenAI.return_value = MagicMock()
+
+            await get_ai_client("grok", user_id=4, db=mock_db)
+
+        mock_get_key.assert_called_once_with(mock_db, 4, "grok")
+        MockOpenAI.assert_called_once_with(api_key="user-grok-key", base_url="https://api.x.ai/v1")
+
+    @pytest.mark.asyncio
+    async def test_groq_user_credential_maps_to_groq(self):
+        """Groq provider maps to 'groq' in credential lookup."""
+        mock_db = AsyncMock()
+
+        with patch("app.services.ai_credential_service.get_user_api_key", new_callable=AsyncMock) as mock_get_key, \
+             patch("openai.AsyncOpenAI") as MockOpenAI:
+            mock_get_key.return_value = "user-groq-key"
+            MockOpenAI.return_value = MagicMock()
+
+            await get_ai_client("groq", user_id=5, db=mock_db)
+
+        mock_get_key.assert_called_once_with(mock_db, 5, "groq")
+        MockOpenAI.assert_called_once_with(api_key="user-groq-key", base_url="https://api.groq.com/openai/v1")
+
+    @pytest.mark.asyncio
     async def test_no_api_key_for_openai_raises(self):
         """Raises ValueError when no OpenAI key configured."""
         with patch("app.config.settings") as mock_settings:
@@ -164,6 +194,30 @@ class TestGetAiClientCredentials:
 
         assert isinstance(client, GeminiClientWrapper)
         assert client.api_key == "sys-gem-key"
+
+    @pytest.mark.asyncio
+    async def test_system_fallback_grok(self):
+        """Uses system xAI Grok key when no user credential."""
+        with patch("app.config.settings") as mock_settings, \
+             patch("openai.AsyncOpenAI") as MockOpenAI:
+            mock_settings.grok_api_key = "sys-grok-key"
+            MockOpenAI.return_value = MagicMock()
+
+            await get_ai_client("grok")
+
+        MockOpenAI.assert_called_once_with(api_key="sys-grok-key", base_url="https://api.x.ai/v1")
+
+    @pytest.mark.asyncio
+    async def test_system_fallback_groq(self):
+        """Uses system Groq key when no user credential."""
+        with patch("app.config.settings") as mock_settings, \
+             patch("openai.AsyncOpenAI") as MockOpenAI:
+            mock_settings.groq_api_key = "sys-groq-key"
+            MockOpenAI.return_value = MagicMock()
+
+            await get_ai_client("groq")
+
+        MockOpenAI.assert_called_once_with(api_key="sys-groq-key", base_url="https://api.groq.com/openai/v1")
 
 
 # ---------------------------------------------------------------------------
@@ -209,6 +263,30 @@ class TestGetAiClientProviders:
 
         assert isinstance(client, GeminiClientWrapper)
         assert client.api_key == "gem-key"
+
+    @pytest.mark.asyncio
+    async def test_grok_client_created(self):
+        """Grok provider creates an OpenAI-compatible client with xAI base URL."""
+        with patch("app.config.settings") as mock_settings, \
+             patch("openai.AsyncOpenAI") as MockOpenAI:
+            mock_settings.grok_api_key = "grok-key"
+            MockOpenAI.return_value = MagicMock()
+
+            await get_ai_client("grok")
+
+        MockOpenAI.assert_called_once_with(api_key="grok-key", base_url="https://api.x.ai/v1")
+
+    @pytest.mark.asyncio
+    async def test_groq_client_created(self):
+        """Groq provider creates an OpenAI-compatible client with Groq base URL."""
+        with patch("app.config.settings") as mock_settings, \
+             patch("openai.AsyncOpenAI") as MockOpenAI:
+            mock_settings.groq_api_key = "groq-key"
+            MockOpenAI.return_value = MagicMock()
+
+            await get_ai_client("groq")
+
+        MockOpenAI.assert_called_once_with(api_key="groq-key", base_url="https://api.groq.com/openai/v1")
 
     @pytest.mark.asyncio
     async def test_unsupported_provider_raises(self):
@@ -447,6 +525,44 @@ class TestGetAiAnalysis:
         await get_ai_analysis(mock_client, "gemini", "prompt", model="gemini-pro")
 
         mock_client.GenerativeModel.assert_called_once_with("gemini-pro")
+
+    @pytest.mark.asyncio
+    async def test_grok_analysis(self):
+        """Grok analysis uses OpenAI-compatible chat completions."""
+        mock_client = MagicMock()
+        mock_choice = MagicMock()
+        mock_choice.message.content = "Grok says wait"
+        mock_response = MagicMock()
+        mock_response.choices = [mock_choice]
+        mock_client.chat.completions.create = AsyncMock(return_value=mock_response)
+
+        result = await get_ai_analysis(mock_client, "grok", "Analyze BTC")
+
+        assert result == "Grok says wait"
+        mock_client.chat.completions.create.assert_called_once_with(
+            model="grok-3",
+            messages=[{"role": "user", "content": "Analyze BTC"}],
+            max_tokens=2000,
+        )
+
+    @pytest.mark.asyncio
+    async def test_groq_analysis(self):
+        """Groq analysis uses OpenAI-compatible chat completions."""
+        mock_client = MagicMock()
+        mock_choice = MagicMock()
+        mock_choice.message.content = "Groq says wait"
+        mock_response = MagicMock()
+        mock_response.choices = [mock_choice]
+        mock_client.chat.completions.create = AsyncMock(return_value=mock_response)
+
+        result = await get_ai_analysis(mock_client, "groq", "Analyze ETH")
+
+        assert result == "Groq says wait"
+        mock_client.chat.completions.create.assert_called_once_with(
+            model="llama-3.3-70b-versatile",
+            messages=[{"role": "user", "content": "Analyze ETH"}],
+            max_tokens=2000,
+        )
 
     @pytest.mark.asyncio
     async def test_unsupported_provider_raises(self):

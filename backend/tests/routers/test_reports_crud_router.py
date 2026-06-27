@@ -28,6 +28,7 @@ from fastapi import HTTPException
 from app.auth.dependencies import Perm
 from app.models import (
     Account,
+    AIProviderCredential,
     Report,
     ReportGoal,
     ReportSchedule,
@@ -52,6 +53,7 @@ from app.routers.reports_crud_router import (
     delete_schedule,
     download_report_pdf,
     get_report,
+    get_report_ai_providers,
     list_goals,
     list_reports,
     list_schedules,
@@ -660,6 +662,50 @@ class TestCreateSchedule:
             period_window="trailing", lookback_value=30,
         )
         assert s.lookback_unit == "days"
+
+    def test_schedule_create_accepts_all_configured_ai_providers(self):
+        """Report schedules can select any provider supported by Settings."""
+        for provider in ["claude", "openai", "gemini", "grok", "groq"]:
+            schedule = ScheduleCreate(
+                name="x",
+                schedule_type="weekly",
+                period_window="full_prior",
+                ai_provider=provider,
+            )
+            assert schedule.ai_provider == provider
+
+    def test_schedule_create_rejects_unsupported_ai_provider(self):
+        """Failure: unknown providers are rejected before persistence."""
+        with pytest.raises(Exception) as exc:
+            ScheduleCreate(
+                name="x",
+                schedule_type="weekly",
+                period_window="full_prior",
+                ai_provider="not-real",
+            )
+        assert "ai_provider" in str(exc.value)
+
+
+class TestReportAIProviders:
+    @pytest.mark.asyncio
+    async def test_returns_provider_options_with_user_configured_status(self, db_session):
+        """Endpoint marks only the current user's active credentials as configured."""
+        user = await _make_user(db_session, "providers@example.com")
+        other = await _make_user(db_session, "providers-other@example.com")
+        db_session.add_all([
+            AIProviderCredential(user_id=user.id, provider="grok", api_key="key", is_active=True),
+            AIProviderCredential(user_id=user.id, provider="groq", api_key="key", is_active=False),
+            AIProviderCredential(user_id=other.id, provider="openai", api_key="key", is_active=True),
+        ])
+        await db_session.flush()
+
+        result = await get_report_ai_providers(db=db_session, current_user=user)
+
+        options = {option["value"]: option for option in result["providers"]}
+        assert list(options) == ["claude", "openai", "gemini", "grok", "groq"]
+        assert options["grok"]["configured"] is True
+        assert options["groq"]["configured"] is False
+        assert options["openai"]["configured"] is False
 
 
 class TestDeleteSchedule:

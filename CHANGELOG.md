@@ -5,6 +5,14 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v3.13.27] - 2026-06-27
+
+### Added
+- **Report AI provider choices now match your configured Settings keys.** Goal/report review schedules can use Claude, OpenAI, Gemini, xAI Grok, or Groq when you have an active key saved, instead of only showing the older three-provider list.
+
+### Fixed
+- **Report summaries no longer start with a stale Claude model id.** The report AI path now uses the shared current Claude model before falling back to other configured providers, avoiding an avoidable failed first attempt.
+
 ## [v3.13.26] - 2026-06-27
 
 ### Changed

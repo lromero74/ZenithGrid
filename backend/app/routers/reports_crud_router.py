@@ -23,6 +23,7 @@ from app.auth.dependencies import get_current_user, require_permission, Perm
 from app.database import get_db, get_read_db
 from app.models import (
     Account,
+    AIProviderCredential,
     Report,
     ReportGoal,
     ReportSchedule,
@@ -34,10 +35,13 @@ from app.services.report_access import (
     get_writable_schedule,
     report_to_dict,
 )
+from app.services.report_ai_service import get_report_ai_provider_options
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/reports", tags=["reports"])
+
+_REPORT_AI_PROVIDER_PATTERN = "^(claude|openai|gemini|grok|groq)$"
 
 
 async def _resolve_report_user_id(
@@ -158,7 +162,7 @@ class ScheduleCreate(BaseModel):
     account_id: Optional[int] = None
     recipients: List[RecipientItem] = Field(default_factory=list)
     ai_provider: Optional[str] = Field(
-        None, pattern="^(claude|openai|gemini)$"
+        None, pattern=_REPORT_AI_PROVIDER_PATTERN
     )
     generate_ai_summary: bool = True
     goal_ids: List[int] = Field(default_factory=list)
@@ -207,7 +211,7 @@ class ScheduleUpdate(BaseModel):
     periodicity: Optional[str] = None
     account_id: Optional[int] = None
     recipients: Optional[List[RecipientItem]] = None
-    ai_provider: Optional[str] = None
+    ai_provider: Optional[str] = Field(None, pattern=_REPORT_AI_PROVIDER_PATTERN)
     generate_ai_summary: Optional[bool] = None
     goal_ids: Optional[List[int]] = None
     is_enabled: Optional[bool] = None
@@ -437,6 +441,34 @@ async def _resolve_write_user_id(
 
 
 # ----- Goals CRUD -----
+
+
+@router.get("/ai-providers")
+async def get_report_ai_providers(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Return report-summary AI providers and whether the current user configured each one."""
+    result = await db.execute(
+        select(AIProviderCredential.provider).where(
+            AIProviderCredential.user_id == current_user.id,
+            AIProviderCredential.is_active.is_(True),
+            AIProviderCredential.api_key.isnot(None),
+        )
+    )
+    configured = {provider for provider in result.scalars().all()}
+
+    providers = []
+    for option in get_report_ai_provider_options():
+        credential_provider = option.get("credential_provider", option["value"])
+        providers.append({
+            "value": option["value"],
+            "label": option["label"],
+            "configured": credential_provider in configured,
+        })
+
+    return {"providers": providers}
+
 
 @router.get("/goals")
 async def list_goals(

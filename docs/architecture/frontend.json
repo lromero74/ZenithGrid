@@ -48,7 +48,7 @@
     {
       "file": "pages/Reports.tsx",
       "route": "/reports",
-      "purpose": "Financial goals with progress tracking and trend charts, report schedules, generated report history; goal cards show separate expense and savings-target item counts; 'Manage Items' button opens ExpenseItemsEditor. Report schedule cards now include a pause/resume toggle button (sets ReportSchedule.is_active) so users can suspend delivery without deleting the schedule."
+      "purpose": "Financial goals with progress tracking and trend charts, report schedules, generated report history; goal cards show separate expense and savings-target item counts; 'Manage Items' button opens ExpenseItemsEditor. Report schedule cards now include a pause/resume toggle button (sets ReportSchedule.is_active) so users can suspend delivery without deleting the schedule. v3.13.27: ScheduleForm loads configured report AI providers dynamically so the AI Provider selector matches Settings keys, including xAI Grok and Groq."
     },
     {
       "file": "pages/Admin.tsx",
@@ -888,7 +888,7 @@
       },
       {
         "name": "reportsApi",
-        "purpose": "Goals CRUD, goal trend data, report schedules, generated reports"
+        "purpose": "Goals CRUD, goal trend data, report schedules, generated reports; v3.13.27 adds getReportAIProviders() for GET /reports/ai-providers so schedule forms can show current-user configured AI providers"
       },
       {
         "name": "speculativeBucketApi",

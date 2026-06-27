@@ -1407,6 +1407,17 @@ describe('reportsApi', () => {
     expect(api.get).toHaveBeenCalledWith('/reports/schedules', { params: {} })
   })
 
+  test('getReportAIProviders calls correct endpoint', async () => {
+    vi.mocked(api.get).mockResolvedValue({
+      data: { providers: [{ value: 'grok', label: 'xAI (Grok)', configured: true }] },
+    })
+
+    const result = await reportsApi.getReportAIProviders()
+
+    expect(api.get).toHaveBeenCalledWith('/reports/ai-providers')
+    expect(result).toEqual([{ value: 'grok', label: 'xAI (Grok)', configured: true }])
+  })
+
   test('getHistory with default params', async () => {
     vi.mocked(api.get).mockResolvedValue({ data: { total: 0, reports: [] } })
 

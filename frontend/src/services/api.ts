@@ -946,6 +946,12 @@ import type {
   ExpenseItem,
 } from '../types'
 
+export interface ReportAIProviderOption {
+  value: string
+  label: string
+  configured: boolean
+}
+
 export interface ScheduleCreatePayload {
   name: string
   schedule_type: ScheduleType
@@ -995,6 +1001,8 @@ export const reportsApi = {
     api.get<string[]>('/reports/expense-categories').then(r => r.data),
 
   // Schedules
+  getReportAIProviders: () =>
+    api.get<{ providers: ReportAIProviderOption[] }>('/reports/ai-providers').then(r => r.data.providers),
   getSchedules: (accountId?: number) =>
     api.get<ReportSchedule[]>('/reports/schedules', {
       params: accountId ? { account_id: accountId } : {}

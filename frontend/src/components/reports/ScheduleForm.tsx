@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { X, Plus, Trash2 } from 'lucide-react'
 import { useAccount } from '../../contexts/AccountContext'
+import { reportsApi, type ReportAIProviderOption } from '../../services/api'
 import type {
   RecipientEntry, ReportGoal, ReportSchedule,
   ScheduleType, PeriodWindow, LookbackUnit,
@@ -69,11 +70,10 @@ const MONTH_LABELS = [
   'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
 ]
 
-const AI_PROVIDERS = [
-  { value: '', label: 'Default (first available)' },
-  { value: 'claude', label: 'Claude (Anthropic)' },
-  { value: 'openai', label: 'OpenAI (GPT)' },
-  { value: 'gemini', label: 'Google Gemini' },
+const FALLBACK_AI_PROVIDERS: ReportAIProviderOption[] = [
+  { value: 'claude', label: 'Claude (Anthropic)', configured: true },
+  { value: 'openai', label: 'OpenAI (GPT)', configured: true },
+  { value: 'gemini', label: 'Google Gemini', configured: true },
 ]
 
 function normalizeRecipients(raw: unknown[]): RecipientEntry[] {
@@ -113,6 +113,7 @@ export function ScheduleForm({ isOpen, onClose, onSubmit, goals, initialData, re
   const [recipients, setRecipients] = useState<RecipientEntry[]>([])
   const [newRecipient, setNewRecipient] = useState('')
   const [aiProvider, setAiProvider] = useState('')
+  const [aiProviderOptions, setAiProviderOptions] = useState<ReportAIProviderOption[]>(FALLBACK_AI_PROVIDERS)
   const [generateAiSummary, setGenerateAiSummary] = useState(true)
   const [selectedGoalIds, setSelectedGoalIds] = useState<number[]>([])
   const [isEnabled, setIsEnabled] = useState(true)
@@ -124,6 +125,21 @@ export function ScheduleForm({ isOpen, onClose, onSubmit, goals, initialData, re
   const [retentionCount, setRetentionCount] = useState<number | null>(null)
   const [retentionDays, setRetentionDays] = useState<number | null>(null)
   const [submitting, setSubmitting] = useState(false)
+
+  useEffect(() => {
+    if (!isOpen) return
+    let cancelled = false
+
+    reportsApi.getReportAIProviders()
+      .then(options => {
+        if (!cancelled) setAiProviderOptions(options)
+      })
+      .catch(() => {
+        if (!cancelled) setAiProviderOptions(FALLBACK_AI_PROVIDERS)
+      })
+
+    return () => { cancelled = true }
+  }, [isOpen])
 
   useEffect(() => {
     if (initialData) {
@@ -196,6 +212,14 @@ export function ScheduleForm({ isOpen, onClose, onSubmit, goals, initialData, re
       setRetentionDays(null)
     }
   }, [initialData, isOpen])
+
+  const configuredAIProviderOptions = aiProviderOptions.filter(option => option.configured)
+  const selectedAIProviderOption = aiProvider
+    ? aiProviderOptions.find(option => option.value === aiProvider)
+    : null
+  const showSelectedUnconfiguredProvider = Boolean(
+    aiProvider && selectedAIProviderOption && !selectedAIProviderOption.configured,
+  )
 
   if (!isOpen) return null
 
@@ -689,10 +713,19 @@ export function ScheduleForm({ isOpen, onClose, onSubmit, goals, initialData, re
                 onChange={e => setAiProvider(e.target.value)}
                 className="w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white focus:outline-none focus:border-blue-500"
               >
-                {AI_PROVIDERS.map(o => (
+                <option value="">Default (first configured)</option>
+                {configuredAIProviderOptions.map(o => (
                   <option key={o.value} value={o.value}>{o.label}</option>
                 ))}
+                {showSelectedUnconfiguredProvider && selectedAIProviderOption && (
+                  <option value={selectedAIProviderOption.value} disabled>
+                    {selectedAIProviderOption.label} (not configured)
+                  </option>
+                )}
               </select>
+              <p className="mt-1 text-xs text-slate-500">
+                Only providers with an active key in Settings are shown.
+              </p>
             </div>
           )}
 

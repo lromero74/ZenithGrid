@@ -143,7 +143,7 @@
     {
       "file": "routers/reports_crud_router.py",
       "prefix": "/api/reports",
-      "purpose": "Financial goals CRUD, report schedules CRUD, generated report listing and download; _goal_to_dict() returns savings_target_count; v3.13.23 GoalUpdate accepts start_date so existing goals can reset tracking windows without recreation, while validating start before target and no future start dates; split from reports_router.py. Registered AFTER reports_generation_router in main.py because its /{report_id} int-typed route would otherwise shadow sibling string routes."
+      "purpose": "Financial goals CRUD, report schedules CRUD, generated report listing and download; _goal_to_dict() returns savings_target_count; v3.13.23 GoalUpdate accepts start_date so existing goals can reset tracking windows without recreation, while validating start before target and no future start dates; v3.13.27 exposes GET /api/reports/ai-providers so schedule forms show report-summary providers with current-user configured status; split from reports_router.py. Registered AFTER reports_generation_router in main.py because its /{report_id} int-typed route would otherwise shadow sibling string routes."
     },
     {
       "file": "routers/transfers_router.py",
@@ -1569,7 +1569,7 @@
     },
     {
       "file": "services/report_ai_service.py",
-      "purpose": "Generates AI-powered summaries for performance reports using per-user AI credentials; tiered output (beginner/comfortable/experienced); includes trading activity context in prompts",
+      "purpose": "Generates AI-powered summaries for performance reports using per-user AI credentials; tiered output (beginner/comfortable/experienced); includes trading activity context in prompts; v3.13.27 supports Claude, OpenAI, Gemini, xAI Grok, and Groq in the shared fallback order and aligns Claude with the shared current model id",
       "type": "analysis"
     },
     {

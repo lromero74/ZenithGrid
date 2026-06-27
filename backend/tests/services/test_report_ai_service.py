@@ -7,6 +7,8 @@ from unittest.mock import AsyncMock, MagicMock, patch
 from app.services.report_ai_service import (
     generate_report_summary,
     _build_summary_prompt,
+    _call_ai,
+    get_report_ai_provider_options,
     _parse_tiered_summary,
     _summarize_conditions,
 )
@@ -201,8 +203,8 @@ class TestProviderFallback:
         assert provider_used is None
 
     @pytest.mark.asyncio
-    async def test_no_preferred_tries_all_three(self, mock_db, sample_report_data):
-        """When no preferred provider, tries claude, openai, gemini in order."""
+    async def test_no_preferred_tries_all_supported_providers(self, mock_db, sample_report_data):
+        """When no preferred provider, tries all report-capable providers in order."""
         providers_tried = []
 
         async def mock_get_client(provider, user_id, db):
@@ -221,12 +223,11 @@ class TestProviderFallback:
                 provider=None,
             )
 
-        # Should try all three: claude→anthropic, openai, gemini
-        assert len(providers_tried) == 3
+        assert providers_tried == ["anthropic", "openai", "gemini", "grok", "groq"]
 
     @pytest.mark.asyncio
     async def test_preferred_gemini_fallback_order(self, mock_db, sample_report_data):
-        """preferred=gemini → tries gemini, claude, openai in that order."""
+        """preferred=gemini → tries gemini first, then the normal fallback order."""
         providers_tried = []
 
         async def mock_get_client(provider, user_id, db):
@@ -245,9 +246,78 @@ class TestProviderFallback:
                 provider="gemini",
             )
 
-        # gemini first, then the claude→openai fallback
-        assert providers_tried[0] == "gemini"
-        assert len(providers_tried) == 3
+        assert providers_tried == ["gemini", "anthropic", "openai", "grok", "groq"]
+
+
+class TestReportAIProviderOptions:
+    """Provider metadata shared by API validation and the report schedule UI."""
+
+    def test_includes_all_configurable_settings_providers(self):
+        options = get_report_ai_provider_options()
+        values = [option["value"] for option in options]
+
+        assert values == ["claude", "openai", "gemini", "grok", "groq"]
+        assert [option["label"] for option in options] == [
+            "Claude (Anthropic)",
+            "OpenAI (GPT)",
+            "Google Gemini",
+            "xAI (Grok)",
+            "Groq (Llama 3.3 70B)",
+        ]
+
+    def test_returns_copy(self):
+        options = get_report_ai_provider_options()
+        options[0]["label"] = "Changed"
+
+        assert get_report_ai_provider_options()[0]["label"] == "Claude (Anthropic)"
+
+
+class TestCallAI:
+    """Provider-specific report summary calls."""
+
+    @pytest.mark.asyncio
+    async def test_call_ai_claude_uses_shared_current_model(self):
+        mock_client = MagicMock()
+        mock_client.messages.create = AsyncMock(
+            return_value=MagicMock(content=[MagicMock(text=FAKE_TIERED_RESPONSE)])
+        )
+
+        result = await _call_ai(mock_client, "claude", "prompt")
+
+        assert result == FAKE_TIERED_RESPONSE
+        assert mock_client.messages.create.call_args.kwargs["model"] == "claude-sonnet-4-5-20250929"
+
+    @pytest.mark.asyncio
+    async def test_call_ai_grok_uses_xai_model(self):
+        mock_client = MagicMock()
+        mock_choice = MagicMock()
+        mock_choice.message.content = FAKE_TIERED_RESPONSE
+        mock_client.chat.completions.create = AsyncMock(
+            return_value=MagicMock(choices=[mock_choice])
+        )
+
+        result = await _call_ai(mock_client, "grok", "prompt")
+
+        assert result == FAKE_TIERED_RESPONSE
+        call_args = mock_client.chat.completions.create.call_args
+        assert call_args.kwargs["model"] == "grok-3"
+        assert call_args.kwargs["max_tokens"] == 4096
+
+    @pytest.mark.asyncio
+    async def test_call_ai_groq_uses_groq_model(self):
+        mock_client = MagicMock()
+        mock_choice = MagicMock()
+        mock_choice.message.content = FAKE_TIERED_RESPONSE
+        mock_client.chat.completions.create = AsyncMock(
+            return_value=MagicMock(choices=[mock_choice])
+        )
+
+        result = await _call_ai(mock_client, "groq", "prompt")
+
+        assert result == FAKE_TIERED_RESPONSE
+        call_args = mock_client.chat.completions.create.call_args
+        assert call_args.kwargs["model"] == "llama-3.3-70b-versatile"
+        assert call_args.kwargs["max_tokens"] == 4096
 
 
 # ---------------------------------------------------------------------------
