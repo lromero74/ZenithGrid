@@ -15,6 +15,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import Account, Position
+from app.services.pnl_service import resolve_btc_usd_price
 
 logger = logging.getLogger(__name__)
 
@@ -122,7 +123,7 @@ def calculate_bot_pnl(
         if is_btc_pair:
             profit_btc = pos.profit_quote or 0.0
         else:
-            btc_price = pos.btc_usd_price_at_close or pos.btc_usd_price_at_open or 100000.0
+            btc_price = resolve_btc_usd_price(pos)
             profit_btc = profit_usd / btc_price if btc_price > 0 else 0.0
 
         total_pnl_usd += profit_usd
@@ -141,7 +142,7 @@ def calculate_bot_pnl(
         # Capital deployed
         quote_spent = pos.total_quote_spent or 0.0
         if is_btc_pair:
-            deploy_btc_price = pos.btc_usd_price_at_close or pos.btc_usd_price_at_open or 100000.0
+            deploy_btc_price = resolve_btc_usd_price(pos)
             total_capital_deployed_usd += quote_spent * deploy_btc_price
         else:
             total_capital_deployed_usd += quote_spent

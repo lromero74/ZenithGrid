@@ -23,6 +23,7 @@ from app.services.portfolio_service import get_account_balances
 from app.schemas import AIBotLogResponse, AIOpinionLogResponse, PositionResponse, TradeResponse
 from app.schemas.position import LimitOrderDetails
 from app.constants import VALID_CATEGORIES
+from app.services.pnl_service import resolve_btc_usd_price
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -372,7 +373,7 @@ async def get_pnl_timeseries(
             profit_btc = pos.profit_quote or 0.0
         else:
             # USD/USDC/USDT pair: convert USD profit to BTC
-            btc_price = pos.btc_usd_price_at_close or pos.btc_usd_price_at_open or 100000.0
+            btc_price = resolve_btc_usd_price(pos)
             if btc_price > 0:
                 profit_btc = profit_usd / btc_price
             else:
@@ -454,7 +455,7 @@ async def get_pnl_timeseries(
             if pos.product_id and "-BTC" in pos.product_id:
                 profit_btc = pos.profit_quote or 0.0
             else:
-                btc_price = pos.btc_usd_price_at_close or pos.btc_usd_price_at_open or 100000.0
+                btc_price = resolve_btc_usd_price(pos)
                 profit_btc = profit_usd / btc_price if btc_price > 0 else 0.0
 
             if pos.bot_id not in bot_pnl_map:

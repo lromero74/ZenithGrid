@@ -8,7 +8,7 @@ Also includes bot stats and clone operations.
 import logging
 from app.utils.timeutil import utcnow
 from datetime import datetime, timezone
-from typing import List, Optional
+from typing import Dict, List, Optional, Tuple
 
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import case, desc, func, select
@@ -22,6 +22,7 @@ from app.auth.dependencies import get_current_user, require_permission, Perm
 from app.multi_bot_monitor import is_rebalancer_gated, is_rebalancer_bot_overweight
 from app.services.account_access import accessible_account_ids, manager_account_ids, manager_accounts_filter
 from app.services.exchange_service import get_exchange_client_for_account
+from app.services.bot_stats_service import fetch_aggregate_values
 from app.services.portfolio_service import get_coinbase_from_db
 from app.strategies import StrategyDefinition, StrategyRegistry
 
@@ -217,6 +218,32 @@ async def create_bot(
     return response
 
 
+async def build_account_budget_aggregates(
+    db,
+    bots,
+    default_aggregates: Tuple[Optional[float], Optional[float]],
+) -> Dict[int, Tuple[Optional[float], Optional[float]]]:
+    """Map each bot's ``account_id`` to that account's own (BTC, USD) budget
+    aggregates.
+
+    Budget utilization must reflect each bot's OWN account balance, never the
+    default account's — a user owns multiple accounts (CLAUDE.md rule 12). One
+    exchange client is built per distinct account. When an account's client
+    can't be built (no creds / unavailable), that account falls back to
+    ``default_aggregates`` so the row still renders rather than erroring.
+    """
+    aggregates: Dict[int, Tuple[Optional[float], Optional[float]]] = {}
+    for account_id in {b.account_id for b in bots if b.account_id is not None}:
+        try:
+            client = await get_exchange_client_for_account(db, account_id)
+        except ExchangeUnavailableError:
+            client = None
+        aggregates[account_id] = (
+            await fetch_aggregate_values(client) if client else default_aggregates
+        )
+    return aggregates
+
+
 @router.get("/", response_model=List[BotResponse])
 async def list_bots(
     active_only: bool = False,
@@ -229,7 +256,6 @@ async def list_bots(
     from app.services.bot_stats_service import (
         calculate_bot_pnl,
         calculate_budget_utilization,
-        fetch_aggregate_values,
         fetch_position_prices,
         get_open_position_products,
     )
@@ -295,8 +321,11 @@ async def list_bots(
             bot_responses.append(response)
         return bot_responses
 
-    # Pre-fetch aggregate values and position prices ONCE
-    aggregate_btc_value, aggregate_usd_value = await fetch_aggregate_values(coinbase)
+    # Position prices are market-wide (account-agnostic) so one client is fine.
+    # Budget aggregates, however, are per-account balances — build a map so each
+    # bot's budget uses ITS OWN account, not the default account (rule 12).
+    default_aggregates = await fetch_aggregate_values(coinbase)
+    aggregates_by_account = await build_account_budget_aggregates(db, bots, default_aggregates)
     _, unique_products = await get_open_position_products(db, current_user.id)
     position_prices = await fetch_position_prices(coinbase, unique_products)
 
@@ -324,8 +353,9 @@ async def list_bots(
         ]
 
         pnl = calculate_bot_pnl(bot, closed_positions, open_positions, projection_timeframe)
+        bot_btc_value, bot_usd_value = aggregates_by_account.get(bot.account_id, default_aggregates)
         budget = calculate_budget_utilization(
-            bot, open_positions, position_prices, aggregate_btc_value, aggregate_usd_value,
+            bot, open_positions, position_prices, bot_btc_value, bot_usd_value,
         )
 
         bot_response = BotResponse.model_validate(bot)

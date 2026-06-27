@@ -23,7 +23,7 @@ from typing import Dict, List, Optional, Tuple
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.constants import BUY_FEE_RESERVE
+from app.constants import BUY_FEE_RESERVE, FALLBACK_BTC_USD_PRICE
 from app.models import Account, Position
 from app.precision import format_base_amount
 from app.services.realmoney_audit import set_subsystem
@@ -552,7 +552,7 @@ class RebalanceMonitor(SessionMakerMixin):
                 # BTC↔ETH via ETH-BTC pair
                 if side == "BUY":
                     # Buying ETH with BTC
-                    btc_price = prices.get("BTC-USD", 100000.0)
+                    btc_price = prices.get("BTC-USD", FALLBACK_BTC_USD_PRICE)
                     btc_amount = usd_amount / btc_price
                     result = await client.create_market_order(
                         product_id=product_id,
