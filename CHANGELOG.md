@@ -5,6 +5,11 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v3.14.6] - 2026-06-27
+
+### Changed
+- **Removed every remaining suppressed `any` (no behavior change).** Beyond the flagged warnings cleared earlier, this eliminates all 50 deliberately-suppressed `any` types (the `eslint-disable` escapes) across the bot config forms, the deal/price charts, the article reader, and TTS sync — the web app now has truly zero `any`, flagged or suppressed. Strengthening these types completed the shared bot-config types (`StrategyConfig`, `BotTemplate`, `BotCreate`) to match what the backend actually exchanges, so the editor catches even more config-shape mistakes at build time. Verified behavior-identical by the full 2,792-test suite.
+
 ## [v3.14.5] - 2026-06-27
 
 ### Changed
