@@ -38,6 +38,7 @@ def _get_page_summary_cache_key(user_id: int, account_id: int) -> tuple[int, int
 def clear_positions_summary_cache() -> None:
     _positions_summary_cache.clear()
 
+
 LIST_SAFE_STRATEGY_CONFIG_KEYS = {
     "take_profit_percentage",
     "take_profit_percent",
