@@ -14,7 +14,7 @@ import { useGameMusic } from '../../../audio/useGameMusic'
 import { useGameSFX } from '../../../audio/useGameSFX'
 import { getSongForGame } from '../../../audio/songRegistry'
 import { MusicToggle } from '../../MusicToggle'
-import { gameSocket } from '../../../../../services/gameSocket'
+import { gameSocket, type GameActionMessage } from '../../../../../services/gameSocket'
 import { useAuth } from '../../../../../contexts/AuthContext'
 import { getRankDisplay, type Card } from '../../../utils/cardUtils'
 import {
@@ -199,14 +199,14 @@ export function CheatMultiplayer({ roomId, players, playerNames, onLeave }: Prop
   // ── WebSocket listener ───────────────────────────────────────
 
   useEffect(() => {
-    const unsub = gameSocket.on('game:action', (msg: any) => {
+    const unsub = gameSocket.on<GameActionMessage<{ type?: string; targetPlayer?: number; view?: GuestView }>>("game:action", (msg) => {
       if (msg.roomId !== roomId) return
       const action = msg.action
       if (!action) return
 
       if (action.type === 'cheat_sync' && !isHost) {
         if (action.targetPlayer === user?.id) {
-          setGuestView(action.view)
+          setGuestView(action.view ?? null)
         }
         return
       }

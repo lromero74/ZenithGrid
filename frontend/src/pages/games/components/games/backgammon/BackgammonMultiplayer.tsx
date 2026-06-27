@@ -20,7 +20,7 @@ import { useGameMusic } from '../../../audio/useGameMusic'
 import { useGameSFX } from '../../../audio/useGameSFX'
 import { getSongForGame } from '../../../audio/songRegistry'
 import { MusicToggle } from '../../MusicToggle'
-import { gameSocket } from '../../../../../services/gameSocket'
+import { gameSocket, type GameActionMessage } from '../../../../../services/gameSocket'
 import { useAuth } from '../../../../../contexts/AuthContext'
 
 interface BackgammonMultiplayerProps {
@@ -204,7 +204,7 @@ export function BackgammonMultiplayer({ roomId, players, playerNames = {}, onLea
   // -- Listen for opponent actions -------------------------------------------
 
   useEffect(() => {
-    const unsub = gameSocket.on('game:action', (msg) => {
+    const unsub = gameSocket.on<GameActionMessage>('game:action', (msg) => {
       const action = msg.action
       if (!action) return
       if (msg.playerId === user?.id) return
@@ -272,7 +272,7 @@ export function BackgammonMultiplayer({ roomId, players, playerNames = {}, onLea
   useEffect(() => {
     if (!isHost) return
 
-    const unsub = gameSocket.on('game:action', (msg) => {
+    const unsub = gameSocket.on<GameActionMessage>('game:action', (msg) => {
       const action = msg.action
       if (!action || action.type !== 'requestRoll') return
       if (msg.playerId === user?.id) return

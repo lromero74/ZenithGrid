@@ -14,7 +14,7 @@ import { Monitor, ArrowLeft, Swords, Timer, Trophy, Skull, Lock, X, Loader2, Doo
 import { GameLobby } from './GameLobby'
 import { SessionGate } from './SessionGate'
 import { clearLastGamePath } from '../GameHub'
-import { gameSocket } from '../../../../services/gameSocket'
+import { gameSocket, type LobbyMessage } from '../../../../services/gameSocket'
 import { useAuth } from '../../../../contexts/AuthContext'
 import type { Difficulty } from '../../types'
 
@@ -65,7 +65,7 @@ export function MultiplayerWrapper({
   const { user } = useAuth()
   const location = useLocation()
   const canMultiplayer = user?.permissions?.includes('games:multiplayer') ?? false
-  const joiningFriend = (location.state as any)?.joiningFriend === true
+  const joiningFriend = (location.state as { joiningFriend?: boolean } | null)?.joiningFriend === true
 
   const [gameMode, setGameMode] = useState<'select' | 'single' | 'session-check' | 'lobby' | 'playing' | 'joining'>(
     joiningFriend ? 'joining' : 'select'
@@ -100,20 +100,20 @@ export function MultiplayerWrapper({
   // If not buffered yet, subscribe to game:joined so we catch it when it arrives.
   useEffect(() => {
     if (gameMode !== 'joining') return
-    const applyJoin = (msg: any) => {
-      setRoomId(msg.roomId)
+    const applyJoin = (msg: LobbyMessage) => {
+      setRoomId(msg.roomId ?? null)
       setPlayers(msg.players || [])
       setPlayerNames(msg.playerNames || {})
       setRoomConfig(msg.config || {})
       const mode = msg.config?.mode === 'vs' ? 'vs' : (msg.config?.race_type || 'first_to_win')
       setSelectedMultiplayerMode(mode as MultiplayerMode)
       setGameMode('lobby')
-      gameSocket.setActiveRoom(msg.roomId)
+      gameSocket.setActiveRoom(msg.roomId ?? null)
     }
     const pending = gameSocket.consumeJoinResult()
-    if (pending) { applyJoin(pending); return }
+    if (pending) { applyJoin(pending as LobbyMessage); return }
     // Not buffered yet — listen for it live
-    const unsub = gameSocket.on('game:joined', applyJoin)
+    const unsub = gameSocket.on<LobbyMessage>("game:joined", applyJoin)
     const timer = setTimeout(() => setGameMode('select'), 10000)
     return () => { unsub(); clearTimeout(timer) }
   }, [gameMode])
@@ -121,10 +121,10 @@ export function MultiplayerWrapper({
   // On mount, check if we're already in a room (e.g. navigated away and back)
   useEffect(() => {
     if (gameMode !== 'select') return
-    const unsubInfo = gameSocket.on('game:room_info', (msg) => {
+    const unsubInfo = gameSocket.on<LobbyMessage>('game:room_info', (msg) => {
       // Only restore if this room is for our game
       if (msg.gameId !== config.gameId) return
-      setRoomId(msg.roomId)
+      setRoomId(msg.roomId ?? null)
       setPlayers(msg.players || [])
       setPlayerNames(msg.playerNames || {})
       setRoomConfig(msg.config || {})
@@ -136,7 +136,7 @@ export function MultiplayerWrapper({
       } else {
         setGameMode('lobby')
       }
-      gameSocket.setActiveRoom(msg.roomId)
+      gameSocket.setActiveRoom(msg.roomId ?? null)
     })
     // If no room exists, clear any stale active room
     const unsubNoRoom = gameSocket.on('game:no_room', () => {
@@ -153,12 +153,12 @@ export function MultiplayerWrapper({
   // Also listen for game:joined — when accepting an invite, the join response
   // may arrive before GameLobby is mounted. Catch it here and enter lobby.
   useEffect(() => {
-    const unsubSuccess = gameSocket.on('game:rejoin_success', (msg) => {
-      setRoomId(msg.roomId)
+    const unsubSuccess = gameSocket.on<LobbyMessage>('game:rejoin_success', (msg) => {
+      setRoomId(msg.roomId ?? null)
       setPlayers(msg.players || [])
       setPlayerNames(msg.playerNames || {})
       setRoomConfig(msg.config || {})
-      setSelectedMultiplayerMode(msg.mode === 'vs' ? 'vs' : (msg.config?.race_type || 'first_to_win'))
+      setSelectedMultiplayerMode((msg.mode === 'vs' ? 'vs' : (msg.config?.race_type || 'first_to_win')) as MultiplayerMode)
       setGameMode('playing')
     })
     const unsubFailed = gameSocket.on('game:rejoin_failed', (_msg) => {
@@ -166,19 +166,19 @@ export function MultiplayerWrapper({
       gameSocket.setActiveRoom(null)
       setGameMode('select')
     })
-    const unsubLobbyReset = gameSocket.on('game:lobby_reset', (msg) => {
+    const unsubLobbyReset = gameSocket.on<LobbyMessage>('game:lobby_reset', (msg) => {
       // Other player (or self) triggered back-to-lobby — transition to lobby
-      setRoomId(msg.roomId)
+      setRoomId(msg.roomId ?? null)
       setPlayers(msg.players || [])
       setPlayerNames(msg.playerNames || {})
       setRoomConfig(msg.config || {})
       setHostUserId(msg.hostUserId)
       setGameMode('lobby')
     })
-    const unsubJoined = gameSocket.on('game:joined', (msg) => {
+    const unsubJoined = gameSocket.on<LobbyMessage>('game:joined', (msg) => {
       // Invite acceptance or join_friend: join response arrived before lobby mounted
       if (gameMode !== 'lobby') {
-        setRoomId(msg.roomId)
+        setRoomId(msg.roomId ?? null)
         setPlayers(msg.players || [])
         setPlayerNames(msg.playerNames || {})
         setRoomConfig(msg.config || {})
@@ -186,14 +186,14 @@ export function MultiplayerWrapper({
         setSelectedMultiplayerMode(mode as MultiplayerMode)
         setGameMode('lobby')
         // Track room for reconnection if user navigates away and comes back
-        gameSocket.setActiveRoom(msg.roomId)
+        gameSocket.setActiveRoom(msg.roomId ?? null)
       }
     })
     // Handle "already in a room" — backend sends existing room info instead of error
-    const unsubAlready = gameSocket.on('game:already_in_room', (msg) => {
+    const unsubAlready = gameSocket.on<LobbyMessage>('game:already_in_room', (msg) => {
       // Only restore if this room is for our game
       if (msg.gameId !== config.gameId) return
-      setRoomId(msg.roomId)
+      setRoomId(msg.roomId ?? null)
       setPlayers(msg.players || [])
       setPlayerNames(msg.playerNames || {})
       setRoomConfig(msg.config || {})
@@ -205,7 +205,7 @@ export function MultiplayerWrapper({
       } else {
         setGameMode('lobby')
       }
-      gameSocket.setActiveRoom(msg.roomId)
+      gameSocket.setActiveRoom(msg.roomId ?? null)
     })
     // Listen for individual leave confirmation (e.g. leaving mid-game while opponent plays)
     const unsubLeft = gameSocket.on('game:left', (_msg) => {

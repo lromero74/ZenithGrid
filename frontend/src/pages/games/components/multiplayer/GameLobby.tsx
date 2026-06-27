@@ -7,7 +7,7 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { Users, Copy, Check, Play, Loader2, UserPlus, Lock, MessageCircle, Send } from 'lucide-react'
-import { gameSocket } from '../../../../services/gameSocket'
+import { gameSocket, type LobbyMessage } from '../../../../services/gameSocket'
 import { useAuth } from '../../../../contexts/AuthContext'
 import { useFriends } from '../../hooks/useFriends'
 import type { Difficulty } from '../../types'
@@ -87,73 +87,73 @@ export function GameLobby({ gameId, gameName, mode, raceType, maxPlayers = 2, ha
   // Listen for game messages
   useEffect(() => {
     const unsubs = [
-      gameSocket.on('game:created', (msg) => {
-        setRoomId(msg.roomId)
-        setPlayers(msg.players)
+      gameSocket.on<LobbyMessage>('game:created', (msg) => {
+        setRoomId(msg.roomId ?? null)
+        setPlayers(msg.players ?? [])
         if (msg.playerNames) setPlayerNames(msg.playerNames)
         setLobbyState('waiting')
         setIsHost(true)
       }),
-      gameSocket.on('game:joined', (msg) => {
-        setRoomId(msg.roomId)
-        setPlayers(msg.players)
+      gameSocket.on<LobbyMessage>('game:joined', (msg) => {
+        setRoomId(msg.roomId ?? null)
+        setPlayers(msg.players ?? [])
         if (msg.playerNames) setPlayerNames(msg.playerNames)
         if (msg.config) {
-          setRoomConfig(msg.config)
+          setRoomConfig(msg.config as RoomConfig)
           // Lock difficulty to host's choice
-          if (msg.config.difficulty) setDifficulty(msg.config.difficulty)
+          if (msg.config.difficulty) setDifficulty(msg.config.difficulty as Difficulty)
         }
         setLobbyState('waiting')
       }),
-      gameSocket.on('game:player_joined', (msg) => {
-        setPlayers(msg.players)
+      gameSocket.on<LobbyMessage>('game:player_joined', (msg) => {
+        setPlayers(msg.players ?? [])
         if (msg.playerNames) setPlayerNames(msg.playerNames)
       }),
-      gameSocket.on('game:player_left', (msg) => {
-        setPlayers(msg.players)
+      gameSocket.on<LobbyMessage>('game:player_left', (msg) => {
+        setPlayers(msg.players ?? [])
         if (msg.playerNames) setPlayerNames(msg.playerNames)
       }),
-      gameSocket.on('game:player_ready', (msg) => {
-        setReadyPlayers(msg.readyPlayers)
+      gameSocket.on<LobbyMessage>('game:player_ready', (msg) => {
+        setReadyPlayers(msg.readyPlayers ?? [])
       }),
-      gameSocket.on('game:started', (msg) => {
-        const cfg = msg.config || roomConfig
-        onGameStart(msg.roomId, msg.players, msg.playerNames || {}, cfg)
+      gameSocket.on<LobbyMessage>('game:started', (msg) => {
+        const cfg = (msg.config as RoomConfig) || roomConfig
+        onGameStart(msg.roomId ?? "", msg.players ?? [], msg.playerNames || {}, cfg)
       }),
-      gameSocket.on('game:lobby_reset', (msg) => {
+      gameSocket.on<LobbyMessage>('game:lobby_reset', (msg) => {
         // Game ended — room reset to lobby for rematch
-        setRoomId(msg.roomId)
+        setRoomId(msg.roomId ?? null)
         setPlayers(msg.players || [])
         if (msg.playerNames) setPlayerNames(msg.playerNames)
-        if (msg.config) setRoomConfig(msg.config)
+        if (msg.config) setRoomConfig(msg.config as RoomConfig)
         setReadyPlayers([])
         setIsReady(false)
         setIsHost(msg.hostUserId === user?.id)
         setLobbyState('waiting')
       }),
-      gameSocket.on('game:room_closed', () => {
+      gameSocket.on<LobbyMessage>('game:room_closed', () => {
         setLobbyState('idle')
         setRoomId(null)
         setError('Room was closed by the host')
       }),
-      gameSocket.on('game:already_in_room', (msg) => {
+      gameSocket.on<LobbyMessage>('game:already_in_room', (msg) => {
         // User was already in a room — show that lobby instead of erroring
-        setRoomId(msg.roomId)
-        setPlayers(msg.players)
+        setRoomId(msg.roomId ?? null)
+        setPlayers(msg.players ?? [])
         if (msg.playerNames) setPlayerNames(msg.playerNames)
         if (msg.config) {
-          setRoomConfig(msg.config)
-          if (msg.config.difficulty) setDifficulty(msg.config.difficulty)
+          setRoomConfig(msg.config as RoomConfig)
+          if (msg.config.difficulty) setDifficulty(msg.config.difficulty as Difficulty)
         }
         setIsHost(msg.isHost ?? false)
         setReadyPlayers(msg.readyPlayers ?? [])
         setLobbyState('waiting')
         setError(null)
       }),
-      gameSocket.on('game:config_updated', (msg) => {
+      gameSocket.on<LobbyMessage>('game:config_updated', (msg) => {
         if (msg.config) {
-          setRoomConfig(msg.config)
-          if (msg.config.difficulty) setDifficulty(msg.config.difficulty)
+          setRoomConfig(msg.config as RoomConfig)
+          if (msg.config.difficulty) setDifficulty(msg.config.difficulty as Difficulty)
           // Sync mode changes from host
           if (msg.config.mode && onModeChange) {
             const m = msg.config.mode === 'vs' ? 'vs' : (msg.config.race_type || 'first_to_win')
@@ -161,11 +161,11 @@ export function GameLobby({ gameId, gameName, mode, raceType, maxPlayers = 2, ha
           }
         }
       }),
-      gameSocket.on('game:chat', (msg) => {
-        setChatMessages(prev => [...prev.slice(-49), { playerId: msg.playerId, name: msg.playerName, text: msg.text }])
+      gameSocket.on<LobbyMessage>('game:chat', (msg) => {
+        setChatMessages(prev => [...prev.slice(-49), { playerId: msg.playerId ?? 0, name: msg.playerName ?? "", text: msg.text ?? "" }])
       }),
-      gameSocket.on('game:error', (msg) => {
-        setError(msg.error)
+      gameSocket.on<LobbyMessage>('game:error', (msg) => {
+        setError(msg.error ?? null)
       }),
     ]
     return () => unsubs.forEach(fn => fn())

@@ -12,7 +12,7 @@ import { Send, Reply, X, ImageIcon, Loader2, Search, Gamepad2 } from 'lucide-rea
 import { useSendMessage, useEditMessage } from '../../hooks/useChat'
 import type { ChatMessage, ChatMember } from '../../hooks/useChat'
 import { useAuth } from '../../../../contexts/AuthContext'
-import { gameSocket } from '../../../../services/gameSocket'
+import { gameSocket, type LobbyMessage } from '../../../../services/gameSocket'
 import type { GameInfo } from '../../types'
 import { GamePicker } from './GamePicker'
 import { api } from '../../../../services/api'
@@ -171,7 +171,7 @@ export function ChatInput({ channelId, onTyping, editingMessage, onCancelEdit, r
     const mode = game.multiplayer![0]
     gameSocket.createRoom(game.id, mode, { max_players: Math.max(members.length, 2) })
 
-    const unsub = gameSocket.on('game:created', (msg: any) => {
+    const unsub = gameSocket.on<LobbyMessage>('game:created', (msg) => {
       unsub()
       const roomId = msg.roomId
       // Invite all channel members except self

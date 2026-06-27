@@ -16,7 +16,7 @@
 
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import { Trophy, Skull, Clock, Wifi, TrendingUp, Eye, WifiOff, Pause, ChevronLeft, ChevronRight } from 'lucide-react'
-import { gameSocket } from '../../../../services/gameSocket'
+import { gameSocket, type GameActionMessage, type LobbyMessage } from '../../../../services/gameSocket'
 import { useAuth } from '../../../../contexts/AuthContext'
 
 // Fallback value — server sends authoritative `reconnectWindowSeconds` in disconnect message
@@ -57,7 +57,7 @@ export function useRaceMode(roomId: string, raceType: RaceType, options?: RaceMo
   const [opponentLevelUp, setOpponentLevelUp] = useState<LevelAnnouncement | null>(null)
   const [playOnActive, setPlayOnActive] = useState(false)
   /** Per-player visual state for spectating (keyed by playerId). */
-  const [playerStates, setPlayerStates] = useState<Record<number, any>>({})
+  const [playerStates, setPlayerStates] = useState<Record<number, unknown>>({})
   /** Which player the spectator is currently watching (playerId). */
   const [spectateTarget, setSpectateTarget] = useState<number | null>(null)
   const [opponentDisconnected, setOpponentDisconnected] = useState(false)
@@ -97,7 +97,7 @@ export function useRaceMode(roomId: string, raceType: RaceType, options?: RaceMo
   }, [])
 
   useEffect(() => {
-    const unsub = gameSocket.on('game:action', (msg) => {
+    const unsub = gameSocket.on<GameActionMessage<{ type?: string; seed?: number; score?: number; level?: number | string; label?: string; result?: string }>>('game:action', (msg) => {
       const action = msg.action
       if (!action) return
       // Filter self-echoes — the backend broadcasts game:action to all players
@@ -120,7 +120,7 @@ export function useRaceMode(roomId: string, raceType: RaceType, options?: RaceMo
 
       if (action.type === 'race_level_up') {
         const announcement: LevelAnnouncement = {
-          level: action.level,
+          level: action.level ?? 0,
           label: action.label || `Level ${action.level}`,
           timestamp: Date.now(),
         }
@@ -168,7 +168,7 @@ export function useRaceMode(roomId: string, raceType: RaceType, options?: RaceMo
         setRaceResultWithPlayOn('won')
       }
     })
-    const unsubDisconnect = gameSocket.on('game:player_disconnect', (msg) => {
+    const unsubDisconnect = gameSocket.on<LobbyMessage>('game:player_disconnect', (msg) => {
       // Opponent disconnected — game paused, start reconnect countdown
       setOpponentDisconnected(true)
       setOpponentStatus(prev => ({ ...prev, exitType: 'abend' }))
@@ -201,7 +201,7 @@ export function useRaceMode(roomId: string, raceType: RaceType, options?: RaceMo
   // during brief reconnection cycles
   useEffect(() => {
     let disconnectTimer: ReturnType<typeof setTimeout> | null = null
-    const unsub = gameSocket.on('connection', (msg) => {
+    const unsub = gameSocket.on<LobbyMessage>('connection', (msg) => {
       if (msg.connected) {
         // Reconnected — clear any pending disconnect and immediately show connected
         if (disconnectTimer) { clearTimeout(disconnectTimer); disconnectTimer = null }
@@ -219,11 +219,12 @@ export function useRaceMode(roomId: string, raceType: RaceType, options?: RaceMo
 
   // Listen for spectator state from all players
   useEffect(() => {
-    const unsub = gameSocket.on('game:player_state', (msg) => {
+    const unsub = gameSocket.on<LobbyMessage>('game:player_state', (msg) => {
       if (msg.state && msg.playerId) {
-        setPlayerStates(prev => ({ ...prev, [msg.playerId]: msg.state }))
+        const pid = msg.playerId
+        setPlayerStates(prev => ({ ...prev, [pid]: msg.state }))
         // Auto-select first available spectate target
-        setSpectateTarget(prev => prev ?? msg.playerId)
+        setSpectateTarget(prev => prev ?? pid)
       }
     })
     return unsub

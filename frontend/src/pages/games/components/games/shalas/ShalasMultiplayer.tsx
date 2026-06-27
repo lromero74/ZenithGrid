@@ -16,7 +16,7 @@ import { useGameSFX } from '../../../audio/useGameSFX'
 import { getSongForGame } from '../../../audio/songRegistry'
 import { MusicToggle } from '../../MusicToggle'
 import { getRankDisplay } from '../../../utils/cardUtils'
-import { gameSocket } from '../../../../../services/gameSocket'
+import { gameSocket, type GameActionMessage } from '../../../../../services/gameSocket'
 import { useAuth } from '../../../../../contexts/AuthContext'
 import {
   createShalasGame,
@@ -37,6 +37,7 @@ import {
   getFourOfAKindRanks,
   rankName,
   applyAsPlayer,
+  type PlaySource,
 } from './shalasEngine'
 import type { ShalasState } from './shalasEngine'
 
@@ -213,8 +214,8 @@ export function ShalasMultiplayer({ roomId, players, playerNames, onLeave }: Pro
         break
       }
       case 'shalas_selector': {
-        const source = action.source as { type: string; index?: number; stackIndex?: number; card?: string }
-        applyAction(s => chooseSelectorTarget(s, source as any), fromPlayer)
+        const source = action.source as PlaySource
+        applyAction(s => chooseSelectorTarget(s, source), fromPlayer)
         break
       }
       case 'shalas_cant_play': {
@@ -242,7 +243,7 @@ export function ShalasMultiplayer({ roomId, players, playerNames, onLeave }: Pro
   // ── WebSocket listener ─────────────────────────────────────────────
 
   useEffect(() => {
-    const unsub = gameSocket.on('game:action', (msg: any) => {
+    const unsub = gameSocket.on<GameActionMessage<{ type?: string; state?: ShalasState }>>("game:action", (msg) => {
       if (msg.roomId !== roomId) return
 
       const action = msg.action
@@ -250,7 +251,7 @@ export function ShalasMultiplayer({ roomId, players, playerNames, onLeave }: Pro
 
       // State sync from host → guest
       if (action.type === 'shalas_sync' && !isHost) {
-        setGameState(action.state)
+        setGameState(action.state ?? null)
         return
       }
 

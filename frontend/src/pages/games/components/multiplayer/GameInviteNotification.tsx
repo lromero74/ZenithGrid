@@ -9,7 +9,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { UserPlus, Users, X } from 'lucide-react'
-import { gameSocket } from '../../../../services/gameSocket'
+import { gameSocket, type LobbyMessage } from '../../../../services/gameSocket'
 import { useAuth } from '../../../../contexts/AuthContext'
 
 interface PendingInvite {
@@ -39,12 +39,12 @@ export function GameInviteNotification() {
 
   // Listen for incoming invites
   useEffect(() => {
-    const unsub = gameSocket.on('game:invite', (msg) => {
+    const unsub = gameSocket.on<LobbyMessage>('game:invite', (msg) => {
       setInvite({
-        roomId: msg.roomId,
-        gameId: msg.gameId,
-        mode: msg.mode,
-        fromDisplayName: msg.fromDisplayName,
+        roomId: msg.roomId ?? "",
+        gameId: msg.gameId ?? "",
+        mode: msg.mode ?? "",
+        fromDisplayName: msg.fromDisplayName ?? "",
         midGame: msg.midGame || false,
         receivedAt: Date.now(),
       })
@@ -133,7 +133,7 @@ function FriendJoinedToast() {
   const [friendName, setFriendName] = useState<string | null>(null)
 
   useEffect(() => {
-    const unsub = gameSocket.on('game:friend_joined', (msg) => {
+    const unsub = gameSocket.on<LobbyMessage>('game:friend_joined', (msg) => {
       setFriendName(msg.displayName || 'A friend')
     })
     return unsub
