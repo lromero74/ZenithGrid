@@ -198,6 +198,7 @@ def is_update_available(current_version: str, latest_version: str) -> bool:
 
 
 @router.get("/api/health")
+@router.get("/api/health/version")
 async def health_check():
     """Health check endpoint — returns status, version, and process uptime."""
     return {

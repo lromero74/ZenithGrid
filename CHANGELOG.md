@@ -5,6 +5,11 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v3.13.25] - 2026-06-27
+
+### Fixed
+- **`/api/health/version` now returns JSON instead of the frontend shell.** The deploy/prod-check alias is an explicit health route again, matching `/api/health` with status, version, process role, and startup time.
+
 ## [v3.13.24] - 2026-06-27
 
 ### Fixed

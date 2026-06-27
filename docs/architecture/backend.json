@@ -118,7 +118,7 @@
     {
       "file": "routers/system_router.py",
       "prefix": "/api",
-      "purpose": "Health check, dashboard stats, monitor control, system status"
+      "purpose": "Health check, dashboard stats, monitor control, system status; v3.13.25 exposes /api/health/version as an explicit JSON alias for deploy/prod version checks"
     },
     {
       "file": "routers/templates.py",

@@ -6,6 +6,8 @@ changelog, AI providers, shutdown management, and trading pair monitor.
 """
 
 import pytest
+from fastapi import FastAPI
+from fastapi.testclient import TestClient
 from app.utils.timeutil import utcnow
 from datetime import timedelta
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -138,6 +140,20 @@ class TestVersionEndpoint:
         result = await get_version()
         assert "version" in result
         assert isinstance(result["version"], str)
+
+    def test_health_version_route_returns_json(self):
+        """Regression: /api/health/version must be an API route, not SPA fallback HTML."""
+        from app.routers import system_router
+
+        app = FastAPI()
+        app.include_router(system_router.router)
+
+        with patch("app.routers.system_router.get_git_version_cached", return_value="v-test"):
+            response = TestClient(app).get("/api/health/version")
+
+        assert response.status_code == 200
+        assert response.headers["content-type"].startswith("application/json")
+        assert response.json()["version"] == "v-test"
 
 
 class TestBrandEndpoint:
