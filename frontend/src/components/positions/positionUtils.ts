@@ -1,5 +1,5 @@
 import type { ISeriesApi } from 'lightweight-charts'
-import type { Position } from '../../types'
+import type { Position, StrategyConfig } from '../../types'
 
 // Fee adjustment for profit targets
 // Default taker fee rate — varies by exchange:
@@ -30,7 +30,7 @@ export const getFeeAdjustedProfitMultiplier = (
 // Get take profit percentage from position config (frozen at position open) or bot config
 export const getTakeProfitPercent = (
   position: Position,
-  bot: { strategy_config?: Record<string, unknown> } | null | undefined
+  bot: { strategy_config?: StrategyConfig } | null | undefined
 ): number => {
   return position.strategy_config_snapshot?.take_profit_percentage
     ?? position.strategy_config_snapshot?.min_profit_percentage
@@ -116,8 +116,8 @@ export function calculateSOLevels(position: Position): SOLevel[] {
   const cfg = position.strategy_config_snapshot
   if (!cfg) return []
 
-  const priceDeviation: number = cfg.price_deviation
-  const maxSafetyOrders: number = cfg.max_safety_orders
+  const priceDeviation: number = cfg.price_deviation ?? 0
+  const maxSafetyOrders: number = cfg.max_safety_orders ?? 0
   if (!priceDeviation || !maxSafetyOrders) return []
 
   const stepScale: number = cfg.safety_order_step_scale ?? 1.0

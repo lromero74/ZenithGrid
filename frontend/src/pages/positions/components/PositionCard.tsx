@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, memo, lazy, Suspense } from 'react'
+import { useState, useRef, useEffect, memo, lazy, Suspense, type ComponentProps } from 'react'
 import { AlertCircle, BarChart2, Brain, ChevronDown, Edit, Play, Scale, Settings, Square, TrendingUp, TrendingDown } from 'lucide-react'
 import { formatDateTime, formatDateTimeCompact, formatDuration } from '../../../utils/dateFormat'
 import type { Position, Bot, Trade, AIOpinionLog } from '../../../types'
@@ -652,7 +652,7 @@ export const PositionCard = memo(function PositionCard({
           {/* Grid Trading Visualization */}
           {bot?.strategy_type === 'grid_trading' && bot?.strategy_config?.grid_state && currentPrice ? (
             <GridVisualizer
-              gridState={bot.strategy_config.grid_state}
+              gridState={bot.strategy_config.grid_state as ComponentProps<typeof GridVisualizer>['gridState']}
               currentPrice={currentPrice}
               productId={position.product_id || 'ETH-BTC'}
             />

@@ -230,8 +230,9 @@ export const BotListItem = memo(function BotListItem({
           (() => {
             const configuredMax =
               bot.strategy_config.max_concurrent_deals ||
-              bot.strategy_config.max_concurrent_positions
-            const scEnabled = !!(bot.strategy_config as any)?.enable_soft_ceiling
+              bot.strategy_config.max_concurrent_positions ||
+              0
+            const scEnabled = !!bot.strategy_config?.enable_soft_ceiling
 
             // 1. Try to use the backend-computed value if available
             let scMax = scEnabled
