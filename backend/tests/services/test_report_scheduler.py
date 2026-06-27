@@ -18,13 +18,13 @@ from datetime import datetime, timedelta
 from unittest.mock import MagicMock, patch
 import pytest
 
-from app.services.report_scheduler import (
+from app.services.report_scheduler import _normalize_recipient
+from app.services.report_schedule_timing import (
     compute_next_run_flexible,
     compute_period_bounds_flexible,
     compute_next_run_at,
     compute_period_bounds,
     build_periodicity_label,
-    _normalize_recipient,
     _format_period_label,
     _ordinal,
     _parse_schedule_days,

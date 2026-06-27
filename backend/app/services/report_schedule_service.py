@@ -16,7 +16,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.models import Report, ReportGoal, ReportSchedule, ReportScheduleGoal
-from app.services.report_scheduler import build_periodicity_label, compute_next_run_flexible
+from app.services.report_schedule_timing import build_periodicity_label, compute_next_run_flexible
 
 logger = logging.getLogger(__name__)
 
