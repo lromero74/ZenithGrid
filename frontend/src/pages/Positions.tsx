@@ -690,6 +690,7 @@ export default function Positions() {
         <PositionLogsModal
           botId={logsModalPosition.bot_id || 0}
           productId={logsModalPosition.product_id || 'ETH-BTC'}
+          positionId={logsModalPosition.id}
           positionOpenedAt={logsModalPosition.opened_at}
           isOpen={showLogsModal}
           onClose={() => {
