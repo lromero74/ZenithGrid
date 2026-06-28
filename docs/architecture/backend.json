@@ -1650,6 +1650,11 @@
       "type": "infrastructure"
     },
     {
+      "file": "services/rebalancer_gates.py",
+      "purpose": "In-memory rebalancer gate state and bot-rebalancer-group cache, extracted from multi_bot_monitor.py in v3.14.12. Public API: is_rebalancer_gated, is_rebalancer_bot_overweight, mark_gated, clear_gated, mark_overweight, clear_overweight, clear_rebalancer_gates_for_account, get_bot_rebalancer_group.",
+      "type": "infrastructure"
+    },
+    {
       "file": "services/websocket_manager.py",
       "purpose": "WebSocket connection manager for real-time order fill notifications",
       "type": "infrastructure"
@@ -1711,6 +1716,10 @@
       {
         "file": "monitor/bull_flag_processor.py",
         "purpose": "Bull flag strategy bot processing: volume spike scanning, pattern detection, trailing stop management; extracted from MultiBotMonitor.process_bull_flag_bot()"
+      },
+      {
+        "file": "monitor/pair_filters.py",
+        "purpose": "Trading pair filter helpers extracted from multi_bot_monitor.py in v3.14.12. Public API: get_available_trading_products, filter_pairs_by_allowed_categories."
       }
     ]
   },
@@ -1920,7 +1929,7 @@
     },
     {
       "file": "multi_bot_monitor.py",
-      "purpose": "Monitors prices for all active bots and dispatches strategy signals; scheduler closes the parent bot-discovery DB session before launching concurrent per-bot work, each bot reloads in its own session, and concurrent per-pair processing uses isolated per-pair DB sessions"
+      "purpose": "Monitors prices for all active bots and dispatches strategy signals; scheduler closes the parent bot-discovery DB session before launching concurrent per-bot work, each bot reloads in its own session, and concurrent per-pair processing uses isolated per-pair DB sessions. v3.14.12: in-memory rebalancer gate state extracted to services/rebalancer_gates.py and pair-filter helpers (get_available_trading_products, filter_pairs_by_allowed_categories) extracted to monitor/pair_filters.py; the MultiBotMonitor class and monitor loop are unchanged."
     },
     {
       "file": "order_validation.py",

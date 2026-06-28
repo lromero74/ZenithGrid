@@ -22,7 +22,7 @@ from app.bot_routers.schemas import BotResponse, BotRebalancerSaveRequest
 from app.database import get_db
 from app.models import Account, Bot, User
 from app.models.trading import BotRebalancerGroup
-from app.multi_bot_monitor import is_rebalancer_gated, is_rebalancer_bot_overweight
+from app.services.rebalancer_gates import is_rebalancer_gated, is_rebalancer_bot_overweight
 from app.services.account_access import accessible_accounts_filter
 
 logger = logging.getLogger(__name__)

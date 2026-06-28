@@ -1070,7 +1070,7 @@ class TestRebalanceSettings:
         """
         from app.routers.accounts_mutation_router import update_rebalance_settings
         from app.schemas.accounts import RebalanceSettingsUpdate
-        from app import multi_bot_monitor
+        from app.services import rebalancer_gates
 
         # Create two bots on this account and mark them gated.
         bot_a = Bot(
@@ -1087,12 +1087,12 @@ class TestRebalanceSettings:
         await db_session.refresh(bot_b)
         bot_a_id = bot_a.id
         bot_b_id = bot_b.id
-        multi_bot_monitor._rebalancer_gated_bots.update([bot_a_id, bot_b_id])
-        multi_bot_monitor._rebalancer_bot_overweight.update([bot_a_id, bot_b_id])
-        assert multi_bot_monitor.is_rebalancer_gated(bot_a_id)
-        assert multi_bot_monitor.is_rebalancer_gated(bot_b_id)
-        assert multi_bot_monitor.is_rebalancer_bot_overweight(bot_a_id)
-        assert multi_bot_monitor.is_rebalancer_bot_overweight(bot_b_id)
+        rebalancer_gates._gated_bots.update([bot_a_id, bot_b_id])
+        rebalancer_gates._overweight_bots.update([bot_a_id, bot_b_id])
+        assert rebalancer_gates.is_rebalancer_gated(bot_a_id)
+        assert rebalancer_gates.is_rebalancer_gated(bot_b_id)
+        assert rebalancer_gates.is_rebalancer_bot_overweight(bot_a_id)
+        assert rebalancer_gates.is_rebalancer_bot_overweight(bot_b_id)
 
         test_account.rebalance_enabled = True
         await db_session.flush()
@@ -1103,10 +1103,10 @@ class TestRebalanceSettings:
         )
 
         # Only this account's bots are cleared (no cross-account leaks).
-        assert not multi_bot_monitor.is_rebalancer_gated(bot_a_id)
-        assert not multi_bot_monitor.is_rebalancer_gated(bot_b_id)
-        assert not multi_bot_monitor.is_rebalancer_bot_overweight(bot_a_id)
-        assert not multi_bot_monitor.is_rebalancer_bot_overweight(bot_b_id)
+        assert not rebalancer_gates.is_rebalancer_gated(bot_a_id)
+        assert not rebalancer_gates.is_rebalancer_gated(bot_b_id)
+        assert not rebalancer_gates.is_rebalancer_bot_overweight(bot_a_id)
+        assert not rebalancer_gates.is_rebalancer_bot_overweight(bot_b_id)
 
     @pytest.mark.asyncio
     async def test_enabling_rebalancing_does_not_clear_gate_cache(

@@ -110,7 +110,7 @@ class TestBullFlagExitSignals:
             new_callable=AsyncMock,
             return_value=[],
         ), patch(
-            "app.multi_bot_monitor.filter_pairs_by_allowed_categories",
+            "app.monitor.pair_filters.filter_pairs_by_allowed_categories",
             new_callable=AsyncMock,
             return_value=[],
         ):
@@ -144,7 +144,7 @@ class TestBullFlagExitSignals:
             new_callable=AsyncMock,
             return_value=[],
         ), patch(
-            "app.multi_bot_monitor.filter_pairs_by_allowed_categories",
+            "app.monitor.pair_filters.filter_pairs_by_allowed_categories",
             new_callable=AsyncMock,
             return_value=[],
         ):
@@ -172,7 +172,7 @@ class TestBullFlagExitSignals:
             new_callable=AsyncMock,
             return_value=[],
         ), patch(
-            "app.multi_bot_monitor.filter_pairs_by_allowed_categories",
+            "app.monitor.pair_filters.filter_pairs_by_allowed_categories",
             new_callable=AsyncMock,
             return_value=[],
         ):
@@ -207,7 +207,7 @@ class TestBullFlagExitSignals:
             new_callable=AsyncMock,
             return_value=[],
         ), patch(
-            "app.multi_bot_monitor.filter_pairs_by_allowed_categories",
+            "app.monitor.pair_filters.filter_pairs_by_allowed_categories",
             new_callable=AsyncMock,
             return_value=[],
         ):
@@ -275,7 +275,7 @@ class TestBullFlagScanning:
             new_callable=AsyncMock,
             return_value=opportunities,
         ), patch(
-            "app.multi_bot_monitor.filter_pairs_by_allowed_categories",
+            "app.monitor.pair_filters.filter_pairs_by_allowed_categories",
             new_callable=AsyncMock,
             return_value=["SOL-USD", "AVAX-USD", "LOW-USD"],
         ), patch(
@@ -319,7 +319,7 @@ class TestBullFlagEntry:
             new_callable=AsyncMock,
             return_value=[opp],
         ), patch(
-            "app.multi_bot_monitor.filter_pairs_by_allowed_categories",
+            "app.monitor.pair_filters.filter_pairs_by_allowed_categories",
             new_callable=AsyncMock,
             return_value=["SOL-USD"],
         ), patch(
@@ -364,7 +364,7 @@ class TestBullFlagEntry:
             new_callable=AsyncMock,
             return_value=[opp],
         ), patch(
-            "app.multi_bot_monitor.filter_pairs_by_allowed_categories",
+            "app.monitor.pair_filters.filter_pairs_by_allowed_categories",
             new_callable=AsyncMock,
             return_value=["SOL-USD"],
         ):
@@ -398,7 +398,7 @@ class TestBullFlagEntry:
             new_callable=AsyncMock,
             return_value=[opp],
         ), patch(
-            "app.multi_bot_monitor.filter_pairs_by_allowed_categories",
+            "app.monitor.pair_filters.filter_pairs_by_allowed_categories",
             new_callable=AsyncMock,
             return_value=["SOL-USD"],
         ):
@@ -443,7 +443,7 @@ class TestBullFlagEntry:
             new_callable=AsyncMock,
             return_value=opps,
         ), patch(
-            "app.multi_bot_monitor.filter_pairs_by_allowed_categories",
+            "app.monitor.pair_filters.filter_pairs_by_allowed_categories",
             new_callable=AsyncMock,
             return_value=["SOL-USD", "AVAX-USD", "LINK-USD"],
         ), patch(
@@ -479,7 +479,7 @@ class TestBullFlagEntry:
             new_callable=AsyncMock,
             return_value=[opp],
         ), patch(
-            "app.multi_bot_monitor.filter_pairs_by_allowed_categories",
+            "app.monitor.pair_filters.filter_pairs_by_allowed_categories",
             new_callable=AsyncMock,
             return_value=["SOL-USD"],
         ):
@@ -525,7 +525,7 @@ class TestBullFlagCategoryFilter:
             new_callable=AsyncMock,
             return_value=opps,
         ), patch(
-            "app.multi_bot_monitor.filter_pairs_by_allowed_categories",
+            "app.monitor.pair_filters.filter_pairs_by_allowed_categories",
             new_callable=AsyncMock,
             return_value=["SOL-USD"],  # MEME-USD filtered out
         ), patch(

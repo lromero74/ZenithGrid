@@ -41,6 +41,17 @@ from app.services.realmoney_audit import set_subsystem
 from app.monitor.batch_analyzer import process_bot_batch as _process_bot_batch
 from app.monitor.bull_flag_processor import process_bull_flag_bot as _process_bull_flag_bot
 from app.monitor.pair_processor import process_bot_pair as _process_bot_pair
+from app.monitor.pair_filters import (
+    filter_pairs_by_allowed_categories,
+    get_available_trading_products,
+)
+from app.services.rebalancer_gates import (
+    clear_gated,
+    clear_overweight,
+    get_bot_rebalancer_group,
+    mark_gated,
+    mark_overweight,
+)
 from app.strategies import StrategyRegistry
 from app.utils.candle_utils import (
     SYNTHETIC_TIMEFRAMES,
@@ -55,66 +66,6 @@ logger = logging.getLogger(__name__)
 
 # Module-level reference to the active monitor instance (set in __init__)
 _active_monitor_instance: Optional["MultiBotMonitor"] = None
-
-# Bot IDs gated by the rebalancer on their most recent cycle (in-memory, resets on restart)
-_rebalancer_gated_bots: set = set()
-
-# Bot IDs currently overweight per the bot budget rebalancer (in-memory, resets on restart)
-_rebalancer_bot_overweight: set = set()
-
-# TTL cache for BotRebalancerGroup lookups: (account_id, base_currency) -> (group, timestamp)
-_rebalancer_group_cache: Dict[tuple, Any] = {}
-_REBALANCER_GROUP_CACHE_TTL = 60  # seconds
-
-
-def is_rebalancer_gated(bot_id: int) -> bool:
-    """Return True if this bot was restricted to DCA-only on its last cycle."""
-    return bot_id in _rebalancer_gated_bots
-
-
-def is_rebalancer_bot_overweight(bot_id: int) -> bool:
-    """Return True if this bot is currently overweight per the bot budget rebalancer."""
-    return bot_id in _rebalancer_bot_overweight
-
-
-async def clear_rebalancer_gates_for_account(
-    db: AsyncSession,
-    account_id: int,
-) -> int:
-    """Drop in-memory rebalancer gate state for one account.
-
-    Called when the user disables portfolio rebalancing so the monitor
-    stops blocking bots that were gated by stale or now-irrelevant data.
-    Looks up the account's bot IDs from the DB so the in-memory sets are
-    only cleared for this account (no cross-account leaks).
-
-    Returns the number of bot IDs removed from the gated sets.
-    """
-    from sqlalchemy import select
-    from app.models import Bot
-    res = await db.execute(
-        select(Bot.id).where(Bot.account_id == account_id)
-    )
-    bot_ids = {row[0] for row in res.all()}
-    removed = 0
-    for bid in bot_ids:
-        if bid in _rebalancer_gated_bots:
-            _rebalancer_gated_bots.discard(bid)
-            removed += 1
-        if bid in _rebalancer_bot_overweight:
-            _rebalancer_bot_overweight.discard(bid)
-            removed += 1
-    return removed
-
-
-async def get_available_trading_products(db: AsyncSession) -> set[str]:
-    """Return currently listed products, using the delisted-pair monitor cache."""
-    from app.services.delisted_pair_monitor import trading_pair_monitor
-
-    cached = getattr(trading_pair_monitor, "_available_products", set()) or set()
-    if cached:
-        return set(cached)
-    return await trading_pair_monitor.get_available_products(db)
 
 
 # Per-task exchange client context (each asyncio.Task gets its own copy)
@@ -132,125 +83,6 @@ def clear_monitor_exchange_cache(account_id: Optional[int] = None):
         _active_monitor_instance._exchange_cache.pop(account_id, None)
     else:
         _active_monitor_instance._exchange_cache.clear()
-
-
-async def _get_bot_rebalancer_group(
-    db: AsyncSession,
-    account_id: int,
-    base_currency: str,
-) -> Optional[Any]:
-    """Load a BotRebalancerGroup with a short TTL cache to avoid per-bot DB hits every cycle."""
-    import time
-    cache_key = (account_id, base_currency)
-    cached = _rebalancer_group_cache.get(cache_key)
-    if cached is not None:
-        group, ts = cached
-        if time.monotonic() - ts < _REBALANCER_GROUP_CACHE_TTL:
-            return group
-
-    from app.models.trading import BotRebalancerGroup
-    result = await db.execute(
-        select(BotRebalancerGroup).where(
-            BotRebalancerGroup.account_id == account_id,
-            BotRebalancerGroup.base_currency == base_currency,
-        )
-    )
-    group = result.scalar_one_or_none()
-    _rebalancer_group_cache[cache_key] = (group, time.monotonic())
-    return group
-
-
-async def filter_pairs_by_allowed_categories(
-    db: AsyncSession,
-    trading_pairs: List[str],
-    allowed_categories: Optional[List[str]] = None,
-    user_id: Optional[int] = None,
-) -> List[str]:
-    """
-    Filter trading pairs based on allowed coin categories from blacklist table.
-
-    Args:
-        db: Database session
-        trading_pairs: List of pairs to filter (e.g., ["ETH-BTC", "ADA-BTC"])
-        allowed_categories: List of allowed categories (e.g., ["APPROVED", "BORDERLINE"])
-                          If None or empty, no filtering is applied.
-        user_id: Optional user ID. If provided, per-user overrides take precedence
-                 over global entries.
-
-    Returns:
-        Filtered list of trading pairs that match allowed categories
-    """
-    if not allowed_categories or len(allowed_categories) == 0:
-        # No filtering - allow all pairs
-        return trading_pairs
-
-    from app.models import BlacklistedCoin
-
-    # Extract base currencies from pairs
-    base_currencies = set()
-    pair_to_base = {}
-    for pair in trading_pairs:
-        if "-" in pair:
-            base = pair.split("-")[0]
-            base_currencies.add(base.upper())
-            pair_to_base[pair] = base.upper()
-
-    # Query blacklist table for these currencies (user_id IS NULL = global entries)
-    query = select(BlacklistedCoin).where(
-        BlacklistedCoin.symbol.in_(base_currencies),
-        BlacklistedCoin.user_id.is_(None)
-    )
-    result = await db.execute(query)
-    blacklist_entries = result.scalars().all()
-
-    def _category_from_reason(reason: str) -> str:
-        if reason.startswith("[APPROVED]"):
-            return "APPROVED"
-        elif reason.startswith("[BORDERLINE]"):
-            return "BORDERLINE"
-        elif reason.startswith("[QUESTIONABLE]"):
-            return "QUESTIONABLE"
-        elif reason.startswith("[MEME]"):
-            return "MEME"
-        return "BLACKLISTED"
-
-    # Build map of currency -> category (global entries first)
-    currency_categories = {}
-    for entry in blacklist_entries:
-        reason = entry.reason or ""
-        currency_categories[entry.symbol] = _category_from_reason(reason)
-
-    # Apply per-user overrides if user_id is provided
-    if user_id is not None:
-        override_query = select(BlacklistedCoin).where(
-            BlacklistedCoin.symbol.in_(base_currencies),
-            BlacklistedCoin.user_id == user_id,
-        )
-        override_result = await db.execute(override_query)
-        for entry in override_result.scalars().all():
-            reason = entry.reason or ""
-            currency_categories[entry.symbol] = _category_from_reason(reason)
-
-    # Filter pairs based on allowed categories
-    filtered_pairs = []
-    for pair in trading_pairs:
-        base = pair_to_base.get(pair)
-        if not base:
-            continue
-
-        category = currency_categories.get(base, "APPROVED")  # Default to APPROVED if not in blacklist
-        if category in allowed_categories:
-            filtered_pairs.append(pair)
-        else:
-            logger.debug(f"  Filtered out {pair}: {base} is {category}, not in allowed {allowed_categories}")
-
-    if len(filtered_pairs) < len(trading_pairs):
-        logger.info(
-            f"  Category filter: {len(trading_pairs)} pairs → {len(filtered_pairs)} pairs "
-            f"(allowed: {', '.join(allowed_categories)})"
-        )
-
-    return filtered_pairs
 
 
 class MultiBotMonitor:
@@ -723,7 +555,7 @@ class MultiBotMonitor:
                     if _quote_is_overweight(bot.account_id, _quote_cur):
                         before = len(trading_pairs)
                         trading_pairs = [p for p in trading_pairs if p in pairs_with_positions]
-                        _rebalancer_gated_bots.add(bot.id)
+                        mark_gated(bot.id)
                         if len(trading_pairs) < before:
                             logger.info(
                                 f"  ⏸ Rebalancer gate: {bot.name} — {_quote_cur} is overweight, "
@@ -743,7 +575,7 @@ class MultiBotMonitor:
                             return {"action": "skip", "reason": "Rebalancer gate: no open positions to manage"}
                     else:
                         # Fresh data says not overweight — clear the gate
-                        _rebalancer_gated_bots.discard(bot.id)
+                        clear_gated(bot.id)
 
             # Bot-level rebalancer overweight gate
             # Blocks new base orders when this bot's actual deployed capital exceeds
@@ -752,7 +584,7 @@ class MultiBotMonitor:
                     and bot.strategy_type != "grid"
                     and bot.bot_rebalancer_target_pct > 0
                     and bot.account_id is not None):
-                _group = await _get_bot_rebalancer_group(
+                _group = await get_bot_rebalancer_group(
                     db, bot.account_id, bot.get_quote_currency()
                 )
                 _tolerance = _group.overweight_tolerance_pct if _group else 5.0
@@ -765,7 +597,7 @@ class MultiBotMonitor:
                     if bot.budget_percentage > 0 else 0.0
                 )
                 if _actual_pct > bot.bot_rebalancer_target_pct + _tolerance:
-                    _rebalancer_bot_overweight.add(bot.id)
+                    mark_overweight(bot.id)
                     trading_pairs = [p for p in trading_pairs if p in pairs_with_positions]
                     logger.info(
                         f"  ⏸ Bot rebalancer: {bot.name} is overweight "
@@ -778,7 +610,7 @@ class MultiBotMonitor:
                             "reason": "Bot rebalancer: overweight — awaiting position wind-down",
                         }
                 else:
-                    _rebalancer_bot_overweight.discard(bot.id)
+                    clear_overweight(bot.id)
 
             # Check if strategy supports batch analysis (AI strategies)
             # Note: For batch mode, we use bot's current config since batch mode only applies to new analysis
