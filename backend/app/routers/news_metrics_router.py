@@ -272,7 +272,7 @@ async def get_btc_supply(current_user: User = Depends(get_current_user)):
         try:
             cache = await fetch_btc_block_height()
         except Exception:
-            pass
+            logger.warning("fetch_btc_block_height failed", exc_info=True)
 
     if not cache:
         raise HTTPException(status_code=503, detail="Could not fetch block height")

@@ -82,6 +82,13 @@ async def clear_rebalancer_gates_for_account(
         if bid in _overweight_bots:
             _overweight_bots.discard(bid)
             removed += 1
+
+    # Also drop this account's cached rebalancer-group rows (keys are
+    # (account_id, base_currency)) so a later re-enable re-reads fresh settings
+    # instead of serving up-to-60s-stale group config.
+    for key in [k for k in _group_cache if k[0] == account_id]:
+        _group_cache.pop(key, None)
+
     return removed
 
 

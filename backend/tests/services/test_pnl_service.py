@@ -99,6 +99,18 @@ class TestCalculateProfit:
         assert result["profit_pct"] == pytest.approx(20.0)
         assert result["unrealized_value"] == pytest.approx(80.0)
 
+    def test_short_zero_sold_quote_returns_zero_pct(self):
+        """Degenerate short (no quote sold) must yield 0% — not a huge wrong
+        percentage from dividing by a 1.0 fallback denominator."""
+        from app.services.pnl_service import calculate_profit
+        pos = self._make_position(
+            direction="short",
+            short_total_sold_base=1.0,
+            short_total_sold_quote=0.0,
+        )
+        result = calculate_profit(pos, current_price=80.0)
+        assert result["profit_pct"] == pytest.approx(0.0)
+
     def test_short_loss_when_price_rises(self):
         """Short position should show loss when price goes up."""
         from app.services.pnl_service import calculate_profit

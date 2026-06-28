@@ -308,6 +308,7 @@ async def run_backtest(
                 )
                 should_buy = should_buy_result[0] if isinstance(should_buy_result, tuple) else False
             except Exception:
+                logger.warning("Backtest strategy.should_buy raised — treating as no-buy", exc_info=True)
                 should_buy = False
 
             if mock_position and not should_buy:
@@ -317,6 +318,7 @@ async def run_backtest(
                     )
                     should_sell = should_sell_result[0] if isinstance(should_sell_result, tuple) else False
                 except Exception:
+                    logger.warning("Backtest strategy.should_sell raised — treating as no-sell", exc_info=True)
                     should_sell = False
 
         # Execute trades
