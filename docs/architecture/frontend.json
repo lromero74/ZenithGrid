@@ -138,7 +138,7 @@
       },
       {
         "file": "components/PositionLogsModal.tsx",
-        "purpose": "View logs, trades, AI decisions for a position"
+        "purpose": "View logs, trades, AI decisions for a position. v3.15.0: accepts a positionId prop, fetches the position's trades via positionsApi.getTrades, and merges the resulting order-fill events (built by orderEvents.buildOrderEvents) into the decision timeline so order executions are interleaved with AI/indicator logs under the All Logs filter."
       },
       {
         "file": "pages/positions/components/FilterPanel.tsx",
@@ -557,6 +557,10 @@
         }
       ],
       "positions": [
+        {
+          "file": "components/positions/orderEvents.ts",
+          "purpose": "v3.15.0: pure helper module. Exports buildOrderEvents(trades) which derives 'order executed' timeline entries from a position's trade ledger — one entry per fill (base order, safety orders, close) with a human-readable label and reason string (e.g. 'Safety order #2 — 4.20% below average entry'). Consumed by PositionLogsModal to merge order fills into the decision timeline."
+        },
         {
           "file": "components/positions/AISentimentIcon.tsx",
           "purpose": "AI sentiment indicator with tooltip"

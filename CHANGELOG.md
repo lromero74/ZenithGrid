@@ -5,6 +5,11 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v3.15.0] - 2026-06-28
+
+### Added
+- **The position Decision History modal now shows the actual order fills.** Previously it only listed AI opinions and indicator-condition matches, so a classic DCA bot (which places safety orders on price drops, not on indicator signals) showed an empty history even while it was actively trading. The modal now also lists the base order, each safety order, and the close — interleaved chronologically with any AI/indicator decisions — with a derived reason for each (e.g. "Safety order #2 — 4.20% below average entry"). This works retroactively for existing positions and for every bot type.
+
 ## [v3.14.14] - 2026-06-28
 
 ### Internal
