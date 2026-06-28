@@ -7,6 +7,7 @@ Also includes bot stats and clone operations.
 
 import logging
 from app.utils.timeutil import utcnow
+from app.bot_routers._shared import bot_write_filter
 from datetime import datetime, timezone
 from typing import Dict, List, Optional, Tuple
 
@@ -20,11 +21,11 @@ from app.exceptions import ExchangeUnavailableError
 from app.models import Account, Bot, BotProduct, Position, User
 from app.auth.dependencies import get_current_user, require_permission, Perm
 from app.services.rebalancer_gates import is_rebalancer_gated, is_rebalancer_bot_overweight
-from app.services.account_access import accessible_account_ids, manager_account_ids, manager_accounts_filter
+from app.services.account_access import accessible_account_ids, manager_accounts_filter
 from app.services.exchange_service import get_exchange_client_for_account
 from app.services.bot_stats_service import fetch_aggregate_values
 from app.services.portfolio_service import get_coinbase_from_db
-from app.strategies import StrategyDefinition, StrategyRegistry
+from app.strategies import StrategyRegistry
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -35,13 +36,6 @@ async def _accessible_bot_filter(db: AsyncSession, current_user_id: int):
     from sqlalchemy import or_
     acc_ids = await accessible_account_ids(db, current_user_id)
     return or_(Bot.user_id == current_user_id, Bot.account_id.in_(acc_ids))
-
-
-async def _bot_write_filter(db: AsyncSession, current_user_id: int):
-    """Filter for bots the user can write (owner or manager of the account)."""
-    from sqlalchemy import or_
-    mgr_ids = await manager_account_ids(db, current_user_id)
-    return or_(Bot.user_id == current_user_id, Bot.account_id.in_(mgr_ids))
 
 
 async def _get_paper_account(db: AsyncSession, user_id: int):
@@ -85,20 +79,8 @@ def _apply_risk_preset_defaults(strategy_config: Optional[dict]) -> dict:
     return merged
 
 
-# Strategy Endpoints
-@router.get("/strategies", response_model=List[StrategyDefinition])
-async def list_strategies(current_user: User = Depends(get_current_user)):
-    """Get list of all available trading strategies"""
-    return StrategyRegistry.list_strategies()
-
-
-@router.get("/strategies/{strategy_id}", response_model=StrategyDefinition)
-async def get_strategy_definition(strategy_id: str, current_user: User = Depends(get_current_user)):
-    """Get detailed definition for a specific strategy"""
-    try:
-        return StrategyRegistry.get_definition(strategy_id)
-    except ValueError:
-        raise HTTPException(status_code=404, detail="Not found")
+# Strategy listing lives in strategies_router (GET /api/strategies). The
+# duplicate /api/bots/strategies endpoints were removed in the v3.14.13 sweep.
 
 
 # Bot CRUD Endpoints
@@ -423,7 +405,7 @@ async def update_bot(
     current_user: User = Depends(require_permission(Perm.BOTS_WRITE))
 ):
     """Update bot configuration"""
-    query = select(Bot).where(Bot.id == bot_id, await _bot_write_filter(db, current_user.id))
+    query = select(Bot).where(Bot.id == bot_id, await bot_write_filter(db, current_user.id))
     result = await db.execute(query)
     bot = result.scalars().first()
 
@@ -534,7 +516,7 @@ async def regenerate_webhook_token(
 ):
     """Generate or regenerate the TradingView webhook token for a bot."""
     import secrets as _secrets
-    query = select(Bot).where(Bot.id == bot_id, await _bot_write_filter(db, current_user.id))
+    query = select(Bot).where(Bot.id == bot_id, await bot_write_filter(db, current_user.id))
     result = await db.execute(query)
     bot = result.scalars().first()
     if not bot:
@@ -555,7 +537,7 @@ async def revoke_webhook_token(
     current_user: User = Depends(require_permission(Perm.BOTS_WRITE))
 ):
     """Revoke the TradingView webhook token for a bot."""
-    query = select(Bot).where(Bot.id == bot_id, await _bot_write_filter(db, current_user.id))
+    query = select(Bot).where(Bot.id == bot_id, await bot_write_filter(db, current_user.id))
     result = await db.execute(query)
     bot = result.scalars().first()
     if not bot:
@@ -576,7 +558,7 @@ async def delete_bot(
     current_user: User = Depends(require_permission(Perm.BOTS_DELETE))
 ):
     """Delete a bot (only if it has no open positions)"""
-    query = select(Bot).where(Bot.id == bot_id, await _bot_write_filter(db, current_user.id))
+    query = select(Bot).where(Bot.id == bot_id, await bot_write_filter(db, current_user.id))
     result = await db.execute(query)
     bot = result.scalars().first()
 
@@ -622,7 +604,7 @@ async def clone_bot(
     - No positions copied (fresh start)
     """
     # Get original bot — accessible to owner and managers
-    query = select(Bot).where(Bot.id == bot_id, await _bot_write_filter(db, current_user.id))
+    query = select(Bot).where(Bot.id == bot_id, await bot_write_filter(db, current_user.id))
     result = await db.execute(query)
     original_bot = result.scalars().first()
 
@@ -728,7 +710,7 @@ async def copy_bot_to_account(
     - Reserved balances reset to 0
     """
     # Get original bot — accessible to owner and managers
-    query = select(Bot).where(Bot.id == bot_id, await _bot_write_filter(db, current_user.id))
+    query = select(Bot).where(Bot.id == bot_id, await bot_write_filter(db, current_user.id))
     result = await db.execute(query)
     original_bot = result.scalars().first()
 

@@ -13,18 +13,9 @@ from typing import Any, Dict, Optional
 from app.ai_team.schemas import BearCase, SignalAssessment
 from app.indicators.ai_providers import get_provider
 from app.services.ai_credential_service import get_user_api_key
+from app.utils.ai_credentials import credential_name_for
 
 logger = logging.getLogger(__name__)
-
-_CREDENTIAL_NAMES = {"claude": "claude", "gpt": "openai", "openai": "openai", "gemini": "gemini"}
-
-
-def _credential_name_for(ai_model: str) -> str:
-    key = (ai_model or "").lower()
-    try:
-        return _CREDENTIAL_NAMES[key]
-    except KeyError as exc:
-        raise ValueError(f"Unknown AI model: {ai_model}") from exc
 
 
 class BearResearchAgent:
@@ -89,7 +80,7 @@ Respond ONLY with valid JSON:
         model_override: Optional[str],
         prompt: str,
     ) -> str:
-        credential_name = _credential_name_for(ai_model)
+        credential_name = credential_name_for(ai_model)
         api_key = await get_user_api_key(db, user_id, credential_name)
         if not api_key:
             raise ValueError(f"No API key configured for {credential_name}")

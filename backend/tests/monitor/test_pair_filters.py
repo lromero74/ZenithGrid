@@ -93,3 +93,22 @@ class TestFilterPairsByAllowedCategories:
         result = await filter_pairs_by_allowed_categories(db_session, pairs, ["APPROVED"])
         assert "ETH-BTC" in result
         assert "DOGE-BTC" not in result
+
+    @pytest.mark.asyncio
+    async def test_unreviewed_coin_is_blocked(self, db_session):
+        """A coin absent from the category table is blocked when a filter is set
+        (it can only trade once explicitly reviewed/categorized as allowed)."""
+        pairs = ["ETH-BTC", "NEWCOIN-BTC"]
+
+        mock_eth = MagicMock()
+        mock_eth.symbol = "ETH"
+        mock_eth.reason = "[APPROVED] Solid project"
+        mock_eth.user_id = None
+
+        mock_result = MagicMock()
+        mock_result.scalars.return_value.all.return_value = [mock_eth]  # NEWCOIN absent
+        db_session.execute = AsyncMock(return_value=mock_result)
+
+        result = await filter_pairs_by_allowed_categories(db_session, pairs, ["APPROVED"])
+        assert "ETH-BTC" in result
+        assert "NEWCOIN-BTC" not in result

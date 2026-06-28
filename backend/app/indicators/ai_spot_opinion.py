@@ -40,6 +40,7 @@ from datetime import datetime
 from typing import Any, Dict, List, Optional, TYPE_CHECKING
 
 from app.indicator_calculator import IndicatorCalculator
+from app.utils.ai_credentials import credential_name_for
 
 if TYPE_CHECKING:
     from app.indicators.ai_tools import ToolContext
@@ -120,15 +121,6 @@ _TOOL_USE_HINTS: Dict[str, str] = {
 
 # The UI-facing `ai_model` string the user picks is distinct from the credential
 # slug used to look up their API key (e.g. "gpt" → stored under "openai").
-_CREDENTIAL_NAMES = {"claude": "claude", "gpt": "openai", "openai": "openai", "gemini": "gemini"}
-
-
-def _credential_name_for(ai_model: str) -> str:
-    key = (ai_model or "").lower()
-    try:
-        return _CREDENTIAL_NAMES[key]
-    except KeyError as exc:
-        raise ValueError(f"Unknown AI model: {ai_model}") from exc
 
 
 @dataclass
@@ -399,7 +391,7 @@ class AISpotOpinionEvaluator:
         from app.indicators.ai_pricing import estimate_cost_usd
         from app.services.ai_credential_service import get_user_api_key
 
-        credential_name = _credential_name_for(ai_model)
+        credential_name = credential_name_for(ai_model)
         api_key = await get_user_api_key(db, user_id, credential_name)
         if not api_key:
             raise ValueError(

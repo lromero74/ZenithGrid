@@ -357,6 +357,9 @@ class BotRebalancerGroup(Base):
     account_id = Column(
         Integer, ForeignKey("trading.accounts.id", ondelete="CASCADE"), nullable=False, index=True
     )
+    # NOTE: despite the name, this stores the QUOTE currency of the rebalancer
+    # group (e.g. "USD", "USDC", "BTC") — callers pass bot.get_quote_currency().
+    # Kept as-is to avoid a migration; the name is a historical misnomer only.
     base_currency = Column(String(20), nullable=False)
     max_total_pct = Column(Float, default=100.0)
     overweight_tolerance_pct = Column(Float, default=5.0)

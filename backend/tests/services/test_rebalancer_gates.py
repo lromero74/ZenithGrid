@@ -106,3 +106,25 @@ class TestGetBotRebalancerGroup:
         from app.services.rebalancer_gates import get_bot_rebalancer_group
         result = await get_bot_rebalancer_group(db, 42, "USD")
         assert result is fresh_group
+
+
+class TestClearFlushesGroupCache:
+    """clear_rebalancer_gates_for_account must also flush that account's cached
+    rebalancer-group rows (and only that account's)."""
+
+    @pytest.mark.asyncio
+    async def test_flushes_only_target_accounts_group_cache(self):
+        import app.services.rebalancer_gates as mod
+        mod._group_cache.clear()
+        mod._group_cache[(42, "USD")] = ("group42", 123.0)
+        mod._group_cache[(99, "USD")] = ("group99", 123.0)  # other account — must remain
+
+        mock_result = MagicMock()
+        mock_result.all.return_value = []  # no bots; cache flush is account-keyed
+        db = MagicMock()
+        db.execute = AsyncMock(return_value=mock_result)
+
+        await mod.clear_rebalancer_gates_for_account(db, 42)
+
+        assert (42, "USD") not in mod._group_cache
+        assert (99, "USD") in mod._group_cache

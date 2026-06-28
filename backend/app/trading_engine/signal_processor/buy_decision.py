@@ -7,6 +7,7 @@ code-quality Phase 5.1.
 
 import asyncio
 import logging
+import weakref
 from app.utils.timeutil import utcnow
 from datetime import timedelta
 from typing import Any, Dict, Optional, Tuple
@@ -38,7 +39,10 @@ logger = logging.getLogger(__name__)
 # concurrently, they share a stale open_positions_count snapshot.
 # This lock serializes the position-count check so each task sees
 # the updated count from the previous task's position creation.
-_bot_position_locks: Dict[int, asyncio.Lock] = {}
+# WeakValueDictionary so a bot's lock is auto-evicted once no in-flight task
+# references it — bounds memory without the race of manually pruning a lock
+# another task may already hold (which would break mutual exclusion).
+_bot_position_locks: "weakref.WeakValueDictionary[int, asyncio.Lock]" = weakref.WeakValueDictionary()
 
 
 async def _log_budget_blocker_if_applicable(

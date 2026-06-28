@@ -640,7 +640,7 @@ export function ArticleReaderProvider({ children }: ArticleReaderProviderProps) 
 
   // Register with media coordinator for mutual exclusion with video player
   useEffect(() => {
-    registerArticleReader(stopPlaylist)
+    return registerArticleReader(stopPlaylist)
   }, [stopPlaylist])
 
   // Play specific article in playlist (user-initiated selection)

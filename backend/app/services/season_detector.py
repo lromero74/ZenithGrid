@@ -30,6 +30,7 @@ from datetime import datetime, timezone
 from typing import Literal, Optional
 
 import aiohttp
+from app.services.market_metrics_service import get_shared_session
 
 logger = logging.getLogger(__name__)
 
@@ -183,62 +184,69 @@ async def fetch_fear_greed() -> Optional[int]:
 async def fetch_ath_data() -> Optional[dict]:
     """Fetch ATH data from CoinGecko."""
     try:
-        async with aiohttp.ClientSession() as session:
-            async with session.get(
-                "https://api.coingecko.com/api/v3/coins/bitcoin",
-                params={"localization": "false", "tickers": "false",
-                        "community_data": "false", "developer_data": "false"},
-                timeout=aiohttp.ClientTimeout(total=10)
-            ) as response:
-                if response.status == 200:
-                    data = await response.json()
-                    market_data = data.get("market_data", {})
-                    current_price = market_data.get("current_price", {}).get("usd", 0)
-                    ath = market_data.get("ath", {}).get("usd", 0)
-                    ath_date_str = market_data.get("ath_date", {}).get("usd", "")
+        session = await get_shared_session()
+        async with session.get(
+            "https://api.coingecko.com/api/v3/coins/bitcoin",
+            params={"localization": "false", "tickers": "false",
+                    "community_data": "false", "developer_data": "false"},
+            timeout=aiohttp.ClientTimeout(total=10)
+        ) as response:
+            if response.status == 200:
+                data = await response.json()
+                market_data = data.get("market_data", {})
+                current_price = market_data.get("current_price", {}).get("usd", 0)
+                ath = market_data.get("ath", {}).get("usd", 0)
+                ath_date_str = market_data.get("ath_date", {}).get("usd", "")
 
-                    if ath > 0 and current_price > 0:
-                        drawdown_pct = ((ath - current_price) / ath) * 100
-                        recovery_pct = (current_price / ath) * 100
+                if ath > 0 and current_price > 0:
+                    drawdown_pct = ((ath - current_price) / ath) * 100
+                    recovery_pct = (current_price / ath) * 100
 
-                        # Calculate days since ATH
-                        days_since_ath = 0
-                        if ath_date_str:
-                            try:
-                                ath_date = datetime.fromisoformat(
-                                    ath_date_str.replace("Z", "+00:00")
-                                )
-                                days_since_ath = (
-                                    datetime.now(timezone.utc) - ath_date
-                                ).days
-                            except Exception:
-                                pass
+                    # Calculate days since ATH
+                    days_since_ath = 0
+                    if ath_date_str:
+                        try:
+                            ath_date = datetime.fromisoformat(
+                                ath_date_str.replace("Z", "+00:00")
+                            )
+                            days_since_ath = (
+                                datetime.now(timezone.utc) - ath_date
+                            ).days
+                        except Exception:
+                            pass
 
-                        return {
-                            "current_price": current_price,
-                            "ath": ath,
-                            "drawdown_pct": drawdown_pct,
-                            "recovery_pct": recovery_pct,
-                            "days_since_ath": days_since_ath
-                        }
+                    return {
+                        "current_price": current_price,
+                        "ath": ath,
+                        "drawdown_pct": drawdown_pct,
+                        "recovery_pct": recovery_pct,
+                        "days_since_ath": days_since_ath
+                    }
     except Exception as e:
         logger.warning(f"Failed to fetch ATH data: {e}")
     return None
 
 
 async def fetch_btc_dominance() -> Optional[float]:
-    """Fetch BTC dominance from CoinGecko."""
+    """Fetch BTC dominance from CoinGecko.
+
+    Note: this and fetch_ath_data extract a season-detection-specific view of the
+    CoinGecko data (e.g. drawdown_pct here is positive, vs the negative
+    ath_change_percentage market_metrics_service uses) — they intentionally are
+    NOT the same as market_metrics_service's fetchers. They do, however, share
+    the same pooled HTTP session to avoid per-call connection churn.
+    """
     try:
-        async with aiohttp.ClientSession() as session:
-            async with session.get(
-                "https://api.coingecko.com/api/v3/global",
-                timeout=aiohttp.ClientTimeout(total=10)
-            ) as response:
-                if response.status == 200:
-                    data = await response.json()
-                    return data.get("data", {}).get(
-                        "market_cap_percentage", {}
-                    ).get("btc", 50)
+        session = await get_shared_session()
+        async with session.get(
+            "https://api.coingecko.com/api/v3/global",
+            timeout=aiohttp.ClientTimeout(total=10)
+        ) as response:
+            if response.status == 200:
+                data = await response.json()
+                return data.get("data", {}).get(
+                    "market_cap_percentage", {}
+                ).get("btc", 50)
     except Exception as e:
         logger.warning(f"Failed to fetch BTC dominance: {e}")
     return None

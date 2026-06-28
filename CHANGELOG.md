@@ -5,6 +5,20 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v3.14.13] - 2026-06-28
+
+### Fixed
+- **Coin-category filter now blocks unreviewed coins.** When a bot has a category filter set, a coin that hasn't been reviewed (absent from the category table) is now held back instead of slipping through as "approved." Once a coin is reviewed and labeled an allowed category, it trades normally.
+- **Short-position percentage display** no longer shows a wildly wrong number in a degenerate state (no quote sold) — it reads 0%, matching the long-position behavior.
+
+### Changed
+- **Backtests and a couple of background fetches now log their failures** instead of swallowing them silently, so a strategy error during a backtest (or an upstream data fetch failure) is visible rather than producing a clean-looking but wrong result.
+- **Faster admin and tournament screens.** Tournament player counts and admin role/group/permission saves now use single batched database queries instead of one round-trip per row.
+- **Smoother bot-config form.** The minimum-order estimate updates immediately when you switch a bot's quote currency, instead of briefly showing the previous currency's value.
+
+### Internal
+- Removed several copy-pasted code blocks that could drift (the AI-provider credential map, the bot-write permission check, and a duplicate strategy-list endpoint), consolidating each to a single source of truth. Per-bot trade locks now release their memory automatically. No user-visible change from these.
+
 ## [v3.14.12] - 2026-06-27
 
 ### Internal

@@ -103,7 +103,10 @@ async def filter_pairs_by_allowed_categories(
         if not base:
             continue
 
-        category = currency_categories.get(base, "APPROVED")  # Default to APPROVED if not in blacklist
+        # Unreviewed coins (absent from the category table) default to BLACKLISTED:
+        # when a filter is set, a coin must be explicitly categorized as an allowed
+        # category to trade. Once reviewed/labeled APPROVED/BORDERLINE/etc. it passes.
+        category = currency_categories.get(base, "BLACKLISTED")
         if category in allowed_categories:
             filtered_pairs.append(pair)
         else:

@@ -67,6 +67,10 @@ function DCABudgetConfigForm({
   // Fetch worst-case minimum order size from the exchange for selected pairs.
   // This refines the immediate fallback estimate used above.
   useEffect(() => {
+    // Immediately reflect the selected quote currency's floor (so switching
+    // BTC<->USD doesn't briefly show the old currency's minimum); the fetch
+    // below refines it for the selected pairs.
+    setWorstCaseMin(fallbackWorstCaseMin)
     if (!productIdsKey) return
 
     const fetchMin = async () => {
