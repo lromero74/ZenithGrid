@@ -5,6 +5,11 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v3.14.14] - 2026-06-28
+
+### Internal
+- Broke up the three largest trading-engine functions (the sell-decision logic, the sell-execution flow, and the per-bot processing loop) into smaller, single-purpose pieces. Each is now easier to read and test in isolation. No behavior change — the logic was moved verbatim and verified identical by the full test suite plus an independent regression review.
+
 ## [v3.14.13] - 2026-06-28
 
 ### Fixed
