@@ -5,6 +5,14 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v3.15.1] - 2026-06-28
+
+### Added
+- **Orders now record the exact reason they fired.** Each base order, safety order, and close stores the engine's own trigger reason at execution time (the entry signal, the exit reason, etc.), and the Decision History shows it verbatim instead of a reason derived after the fact. Orders placed before this release still show a derived reason from the trade ledger, so nothing is blank.
+
+### Database
+- Adds a nullable `trigger_reason` column to the `trades` table (migration 095, additive — no backfill needed).
+
 ## [v3.15.0] - 2026-06-28
 
 ### Added
