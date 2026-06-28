@@ -820,24 +820,18 @@ class IndicatorBasedStrategy(IndicatorCalculationMixin, TradingStrategy):
         current_price: float,
         market_context: Optional[Dict[str, Any]] = None
     ) -> Tuple[bool, str]:
-        """Determine if we should sell based on signal data and TP/SL settings."""
+        """Determine if we should sell based on signal data and TP/SL settings.
+
+        Orchestrates the exit checks in priority order: speculative max-hold,
+        then (after computing direction-aware profit) pattern-based TSL/TTP, then
+        the standard percentage-based trailing-stop / stop-loss / take-profit.
+        """
         take_profit_signal = signal_data.get("take_profit_signal", False)
         avg_price = position.average_buy_price
 
-        # Speculative max-hold: time-based forced exit for catalyst-hunt setups
-        # that haven't moved. Runs BEFORE PnL / TP / SL checks so we always
-        # escape the bucket slot on schedule. Only active when the preset
-        # set speculative_max_hold_hours — absent on all non-speculative bots.
-        # See PRPs/high-risk-doubling-preset.md §Recommended Design §5.
-        max_hold_hours = self.config.get("speculative_max_hold_hours")
-        if max_hold_hours and getattr(position, "opened_at", None) is not None:
-            age_seconds = (utcnow() - position.opened_at).total_seconds()
-            if age_seconds >= float(max_hold_hours) * 3600.0:
-                return (
-                    True,
-                    f"Speculative max hold ({max_hold_hours}h) reached — "
-                    f"exiting to free the bucket slot"
-                )
+        spec = self._check_speculative_max_hold(position)
+        if spec is not None:
+            return spec
 
         # Calculate current profit (direction-aware). Longs profit as price rises;
         # shorts sold base for quote up front and profit by buying it back cheaper, so
@@ -866,6 +860,38 @@ class IndicatorBasedStrategy(IndicatorCalculationMixin, TradingStrategy):
         elif current_price > position.highest_price_since_entry:
             position.highest_price_since_entry = current_price
 
+        pattern = self._check_pattern_exit(position, current_price, avg_price, profit_pct)
+        if pattern is not None:
+            return pattern
+
+        return self._check_percentage_exit(
+            position, current_price, avg_price, profit_pct, direction, take_profit_signal
+        )
+
+    def _check_speculative_max_hold(self, position: Any) -> Optional[Tuple[bool, str]]:
+        """Time-based forced exit for catalyst-hunt (speculative) setups. None = no exit."""
+        # Speculative max-hold: time-based forced exit for catalyst-hunt setups
+        # that haven't moved. Runs BEFORE PnL / TP / SL checks so we always
+        # escape the bucket slot on schedule. Only active when the preset
+        # set speculative_max_hold_hours — absent on all non-speculative bots.
+        # See PRPs/high-risk-doubling-preset.md §Recommended Design §5.
+        max_hold_hours = self.config.get("speculative_max_hold_hours")
+        if max_hold_hours and getattr(position, "opened_at", None) is not None:
+            age_seconds = (utcnow() - position.opened_at).total_seconds()
+            if age_seconds >= float(max_hold_hours) * 3600.0:
+                return (
+                    True,
+                    f"Speculative max hold ({max_hold_hours}h) reached — "
+                    f"exiting to free the bucket slot"
+                )
+        return None
+
+    def _check_pattern_exit(
+        self, position: Any, current_price: float, avg_price: float, profit_pct: float
+    ) -> Optional[Tuple[bool, str]]:
+        """Pattern-based TSL/TTP exit (e.g. bull-flag positions). Returns None for
+        non-pattern positions so the caller falls through to percentage TP/SL."""
+        direction = getattr(position, "direction", "long")
         # =============================================================
         # PATTERN-BASED TSL/TTP (e.g., Bull Flag positions)
         # If position has pattern targets, use those instead of percentage-based
@@ -946,7 +972,13 @@ class IndicatorBasedStrategy(IndicatorCalculationMixin, TradingStrategy):
 
             # Pattern position still open
             return False, f"Pattern position: TSL ${current_tsl:.4f}, TP ${entry_tp:.4f}, profit: {profit_pct:.2f}%"
+        return None
 
+    def _check_percentage_exit(
+        self, position: Any, current_price: float, avg_price: float,
+        profit_pct: float, direction: str, take_profit_signal: bool
+    ) -> Tuple[bool, str]:
+        """Standard percentage-based trailing-stop / stop-loss / take-profit exit."""
         # =============================================================
         # PERCENTAGE-BASED TP/SL (standard positions without pattern targets)
         # =============================================================
