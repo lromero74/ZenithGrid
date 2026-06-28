@@ -90,15 +90,20 @@ async def list_tournaments(
     )
     rows = result.all()
 
+    # Player counts in ONE grouped query instead of a COUNT per tournament (N+1).
+    tournament_ids = [t.id for t, _ in rows]
+    counts_map: dict[int, int] = {}
+    if tournament_ids:
+        counts_result = await db.execute(
+            select(TournamentPlayer.tournament_id, func.count(TournamentPlayer.id))
+            .where(TournamentPlayer.tournament_id.in_(tournament_ids))
+            .group_by(TournamentPlayer.tournament_id)
+        )
+        counts_map = {tid: cnt for tid, cnt in counts_result.all()}
+
     items = []
     for t, creator_name in rows:
-        # Get player count
-        count_q = await db.execute(
-            select(func.count(TournamentPlayer.id)).where(
-                TournamentPlayer.tournament_id == t.id
-            )
-        )
-        player_count = count_q.scalar() or 0
+        player_count = counts_map.get(t.id, 0)
 
         items.append({
             "id": t.id,

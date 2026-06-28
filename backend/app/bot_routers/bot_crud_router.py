@@ -25,7 +25,7 @@ from app.services.account_access import accessible_account_ids, manager_accounts
 from app.services.exchange_service import get_exchange_client_for_account
 from app.services.bot_stats_service import fetch_aggregate_values
 from app.services.portfolio_service import get_coinbase_from_db
-from app.strategies import StrategyDefinition, StrategyRegistry
+from app.strategies import StrategyRegistry
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -79,20 +79,8 @@ def _apply_risk_preset_defaults(strategy_config: Optional[dict]) -> dict:
     return merged
 
 
-# Strategy Endpoints
-@router.get("/strategies", response_model=List[StrategyDefinition])
-async def list_strategies(current_user: User = Depends(get_current_user)):
-    """Get list of all available trading strategies"""
-    return StrategyRegistry.list_strategies()
-
-
-@router.get("/strategies/{strategy_id}", response_model=StrategyDefinition)
-async def get_strategy_definition(strategy_id: str, current_user: User = Depends(get_current_user)):
-    """Get detailed definition for a specific strategy"""
-    try:
-        return StrategyRegistry.get_definition(strategy_id)
-    except ValueError:
-        raise HTTPException(status_code=404, detail="Not found")
+# Strategy listing lives in strategies_router (GET /api/strategies). The
+# duplicate /api/bots/strategies endpoints were removed in the v3.14.13 sweep.
 
 
 # Bot CRUD Endpoints

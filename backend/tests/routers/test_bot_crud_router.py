@@ -7,7 +7,7 @@ copy-to-account, stats, and strategy listing endpoints.
 
 import pytest
 from app.utils.timeutil import utcnow
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, patch
 
 from app.models import Account, Bot, Position, User
 
@@ -47,60 +47,6 @@ async def _make_bot(db_session, user, name="TestBot", strategy_type="grid_tradin
     db_session.add(bot)
     await db_session.flush()
     return bot
-
-
-# =============================================================================
-# GET /bots/strategies
-# =============================================================================
-
-
-class TestListStrategies:
-    """Tests for GET /bots/strategies"""
-
-    @pytest.mark.asyncio
-    async def test_list_strategies_returns_list(self):
-        """Happy path: returns a list of registered strategies."""
-        from app.bot_routers.bot_crud_router import list_strategies
-
-        user = MagicMock(spec=User)
-        result = await list_strategies(current_user=user)
-        assert isinstance(result, list)
-        assert len(result) > 0
-
-    @pytest.mark.asyncio
-    async def test_list_strategies_contains_grid_trading(self):
-        """Happy path: grid_trading strategy is registered."""
-        from app.bot_routers.bot_crud_router import list_strategies
-
-        user = MagicMock(spec=User)
-        result = await list_strategies(current_user=user)
-        ids = [s.id for s in result]
-        assert "grid_trading" in ids
-
-
-class TestGetStrategyDefinition:
-    """Tests for GET /bots/strategies/{strategy_id}"""
-
-    @pytest.mark.asyncio
-    async def test_get_existing_strategy(self):
-        """Happy path: returns strategy definition for known strategy."""
-        from app.bot_routers.bot_crud_router import get_strategy_definition
-
-        user = MagicMock(spec=User)
-        result = await get_strategy_definition(strategy_id="grid_trading", current_user=user)
-        assert result.id == "grid_trading"
-        assert result.name is not None
-
-    @pytest.mark.asyncio
-    async def test_get_unknown_strategy_returns_404(self):
-        """Failure: unknown strategy_id raises 404."""
-        from fastapi import HTTPException
-        from app.bot_routers.bot_crud_router import get_strategy_definition
-
-        user = MagicMock(spec=User)
-        with pytest.raises(HTTPException) as exc_info:
-            await get_strategy_definition(strategy_id="nonexistent_strategy", current_user=user)
-        assert exc_info.value.status_code == 404
 
 
 # =============================================================================

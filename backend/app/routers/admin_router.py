@@ -227,8 +227,11 @@ async def update_user_groups(
 
     # Replace group memberships
     await db.execute(user_groups.delete().where(user_groups.c.user_id == user_id))
-    for group in new_groups:
-        await db.execute(user_groups.insert().values(user_id=user_id, group_id=group.id))
+    if new_groups:
+        await db.execute(
+            user_groups.insert(),
+            [{"user_id": user_id, "group_id": group.id} for group in new_groups],
+        )
     await db.commit()
 
     logger.info(f"Admin {current_user.email} updated groups for user {user.email}: "
@@ -302,8 +305,10 @@ async def create_group(
 
     # Assign roles if provided
     if request.role_ids:
-        for role_id in request.role_ids:
-            await db.execute(group_roles.insert().values(group_id=group.id, role_id=role_id))
+        await db.execute(
+            group_roles.insert(),
+            [{"group_id": group.id, "role_id": role_id} for role_id in request.role_ids],
+        )
         await db.commit()
 
     logger.info(f"Admin {current_user.email} created group '{group.name}'")
@@ -342,8 +347,11 @@ async def update_group(
 
     if request.role_ids is not None:
         await db.execute(group_roles.delete().where(group_roles.c.group_id == group_id))
-        for role_id in request.role_ids:
-            await db.execute(group_roles.insert().values(group_id=group_id, role_id=role_id))
+        if request.role_ids:
+            await db.execute(
+                group_roles.insert(),
+                [{"group_id": group_id, "role_id": role_id} for role_id in request.role_ids],
+            )
 
     await db.commit()
     await db.refresh(group)
@@ -435,8 +443,10 @@ async def create_role(
     await db.refresh(role)
 
     if request.permission_ids:
-        for perm_id in request.permission_ids:
-            await db.execute(role_permissions.insert().values(role_id=role.id, permission_id=perm_id))
+        await db.execute(
+            role_permissions.insert(),
+            [{"role_id": role.id, "permission_id": perm_id} for perm_id in request.permission_ids],
+        )
         await db.commit()
 
     logger.info(f"Admin {current_user.email} created role '{role.name}'")
@@ -478,8 +488,11 @@ async def update_role(
 
     if request.permission_ids is not None:
         await db.execute(role_permissions.delete().where(role_permissions.c.role_id == role_id))
-        for perm_id in request.permission_ids:
-            await db.execute(role_permissions.insert().values(role_id=role_id, permission_id=perm_id))
+        if request.permission_ids:
+            await db.execute(
+                role_permissions.insert(),
+                [{"role_id": role_id, "permission_id": perm_id} for perm_id in request.permission_ids],
+            )
 
     await db.commit()
     await db.refresh(role)
