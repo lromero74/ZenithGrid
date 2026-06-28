@@ -208,7 +208,11 @@
     "bot_routers": [
       {
         "file": "bot_routers/bot_crud_router.py",
-        "purpose": "Bot creation, reading, updating, deletion, strategy listing. v2.165.0 adds _apply_risk_preset_defaults() which is called on create/update to merge preset defaults (from indicators.risk_presets) into the bot's strategy_config whenever a risk_preset is selected \u2014 notably auto-populating the speculative_mode, target_multiple, target_horizon_hours, and speculative_max_hold_hours fields for the 'speculative' preset. v3.14.11 adds build_account_budget_aggregates(db, bots, default_aggregates) which builds a per-account budget aggregate map used by the bot listing endpoint, fixing cross-account budget contamination where bots on different accounts were sharing the same aggregate totals."
+        "purpose": "Bot creation, reading, updating, and deletion. v2.165.0 adds _apply_risk_preset_defaults() which is called on create/update to merge preset defaults (from indicators.risk_presets) into the bot's strategy_config whenever a risk_preset is selected \u2014 notably auto-populating the speculative_mode, target_multiple, target_horizon_hours, and speculative_max_hold_hours fields for the 'speculative' preset. v3.14.11 adds build_account_budget_aggregates(db, bots, default_aggregates) which builds a per-account budget aggregate map used by the bot listing endpoint, fixing cross-account budget contamination where bots on different accounts were sharing the same aggregate totals."
+      },
+      {
+        "file": "bot_routers/_shared.py",
+        "purpose": "Shared auth predicate bot_write_filter (owner-or-manager bot-write authorization check); consolidated from duplicate copies in bot_control_router and bot_crud_router."
       },
       {
         "file": "bot_routers/bot_control_router.py",
@@ -2135,6 +2139,10 @@
     {
       "file": "utils/db_corruption.py",
       "purpose": "is_db_corruption_error(): detects PostgreSQL physical bad-block/storage I/O errors by message signature (no asyncpg import). Lets monitor loops degrade gracefully on corruption instead of aborting a cycle or spamming tracebacks; non-corruption errors still propagate (fail fast)."
+    },
+    {
+      "file": "utils/ai_credentials.py",
+      "purpose": "Single source of truth for AI provider to credential-name mapping. credential_name_for(provider) returns the standardized credential name string for a given AI provider; consolidated from duplicate copies in the four ai_team agents and ai_spot_opinion."
     }
   ],
   "auth_modules": [

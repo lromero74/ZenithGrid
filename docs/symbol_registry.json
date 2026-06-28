@@ -32,9 +32,7 @@
         "run"
       ]
     },
-    "functions": [
-      "_credential_name_for"
-    ]
+    "functions": []
   },
   "backend/app/ai_team/bull_research_agent.py": {
     "classes": {
@@ -45,9 +43,7 @@
         "run"
       ]
     },
-    "functions": [
-      "_credential_name_for"
-    ]
+    "functions": []
   },
   "backend/app/ai_team/distribution_agent.py": {
     "classes": {
@@ -66,9 +62,7 @@
         "run"
       ]
     },
-    "functions": [
-      "_credential_name_for"
-    ]
+    "functions": []
   },
   "backend/app/ai_team/schemas.py": {
     "classes": {
@@ -114,9 +108,7 @@
         "run"
       ]
     },
-    "functions": [
-      "_credential_name_for"
-    ]
+    "functions": []
   },
   "backend/app/ai_team/team_orchestrator.py": {
     "classes": {
@@ -349,6 +341,12 @@
       "run_optimization"
     ]
   },
+  "backend/app/bot_routers/_shared.py": {
+    "classes": {},
+    "functions": [
+      "bot_write_filter"
+    ]
+  },
   "backend/app/bot_routers/bot_ai_logs_router.py": {
     "classes": {},
     "functions": [
@@ -360,7 +358,6 @@
   "backend/app/bot_routers/bot_control_router.py": {
     "classes": {},
     "functions": [
-      "_bot_write_filter",
       "cancel_all_positions",
       "check_seasonality_allows_bot",
       "force_run_bot",
@@ -374,7 +371,6 @@
     "functions": [
       "_accessible_bot_filter",
       "_apply_risk_preset_defaults",
-      "_bot_write_filter",
       "_get_paper_account",
       "build_account_budget_aggregates",
       "clone_bot",
@@ -383,9 +379,7 @@
       "delete_bot",
       "get_bot",
       "get_bot_stats",
-      "get_strategy_definition",
       "list_bots",
-      "list_strategies",
       "regenerate_webhook_token",
       "revoke_webhook_token",
       "update_bot"
@@ -1280,7 +1274,6 @@
     },
     "functions": [
       "_arg_tool_schemas",
-      "_credential_name_for",
       "_tools_module",
       "execute_tool",
       "log_opinion"
@@ -4154,6 +4147,12 @@
       ]
     },
     "functions": []
+  },
+  "backend/app/utils/ai_credentials.py": {
+    "classes": {},
+    "functions": [
+      "credential_name_for"
+    ]
   },
   "backend/app/utils/candle_utils.py": {
     "classes": {},
