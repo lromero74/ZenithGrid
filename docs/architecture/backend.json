@@ -208,7 +208,7 @@
     "bot_routers": [
       {
         "file": "bot_routers/bot_crud_router.py",
-        "purpose": "Bot creation, reading, updating, deletion, strategy listing. v2.165.0 adds _apply_risk_preset_defaults() which is called on create/update to merge preset defaults (from indicators.risk_presets) into the bot's strategy_config whenever a risk_preset is selected \u2014 notably auto-populating the speculative_mode, target_multiple, target_horizon_hours, and speculative_max_hold_hours fields for the 'speculative' preset."
+        "purpose": "Bot creation, reading, updating, deletion, strategy listing. v2.165.0 adds _apply_risk_preset_defaults() which is called on create/update to merge preset defaults (from indicators.risk_presets) into the bot's strategy_config whenever a risk_preset is selected \u2014 notably auto-populating the speculative_mode, target_multiple, target_horizon_hours, and speculative_max_hold_hours fields for the 'speculative' preset. v3.14.11 adds build_account_budget_aggregates(db, bots, default_aggregates) which builds a per-account budget aggregate map used by the bot listing endpoint, fixing cross-account budget contamination where bots on different accounts were sharing the same aggregate totals."
       },
       {
         "file": "bot_routers/bot_control_router.py",
@@ -1536,7 +1536,7 @@
     },
     {
       "file": "services/pnl_service.py",
-      "purpose": "Single source of truth for spot P&L: calculate_realized_spot_profit handles fee-net long closes, calculate_realized_short_profit handles fee-net short closes, and calculate_profit returns live profit_quote, profit_pct, and unrealized_value.",
+      "purpose": "Single source of truth for spot P&L: calculate_realized_spot_profit handles fee-net long closes, calculate_realized_short_profit handles fee-net short closes, and calculate_profit returns live profit_quote, profit_pct, and unrealized_value. v3.14.11 adds resolve_btc_usd_price(position) — the single authoritative BTC/USD fallback price lookup for P&L calculations; the constant FALLBACK_BTC_USD_PRICE was moved to app/constants.py and imported here so all callers share one definition.",
       "type": "analysis"
     },
     {
@@ -1590,6 +1590,11 @@
       "type": "infrastructure"
     },
     {
+      "file": "services/report_schedule_timing.py",
+      "purpose": "Pure schedule timing math extracted from report_scheduler.py (v3.14.11; scheduler dropped from 1317 to 748 lines after extraction). Public functions: compute_next_run_flexible, compute_period_bounds_flexible, compute_next_run_at, compute_period_bounds, build_periodicity_label. No I/O — consumed by report_scheduler.py and report_schedule_service.py.",
+      "type": "analysis"
+    },
+    {
       "file": "services/report_scheduler.py",
       "purpose": "Background task that checks for due report schedules and generates reports; also provides manual trigger function; DeliverReportParams dataclass used for report delivery parameterization. v3.14.0: adds start_manual_report_generation (creates a pending Report row + schedules background render, returns immediately), _run_manual_generation_bg (background worker that fills the pending row), _mark_report_failed (records error and flips status to failed), _reap_orphaned_pending_reports (cleans up stuck pending rows on startup), and _compute_report_period (shared period derivation). generate_report_for_schedule now accepts an optional report= arg to fill an existing pending row in place.",
       "type": "background"
@@ -1631,7 +1636,7 @@
     },
     {
       "file": "services/trading_leader.py",
-      "purpose": "Token-checked Redis leadership lease that permits exactly one combined/trader process and terminates fail-closed if renewal is lost",
+      "purpose": "Token-checked Redis leadership lease that permits exactly one combined/trader process and terminates fail-closed if renewal is lost. v3.14.11: adds _fire_lease_lost() helper (centralises the lease-lost shutdown sequence called by _renew_loop); _renew_loop now also fails closed on Redis errors (connection errors and timeouts are treated as lease loss rather than silently retried) so a Redis outage can no longer leave a rogue trader running.",
       "type": "infrastructure"
     },
     {

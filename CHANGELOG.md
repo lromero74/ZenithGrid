@@ -5,6 +5,20 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v3.14.11] - 2026-06-27
+
+### Fixed
+- **Per-bot budget % now reflects the bot's own account.** On the bots list, each bot's budget-utilization percentage and "insufficient funds" flag are computed against the balance of the account that bot actually trades on — previously every bot was measured against your default account's balance, so bots on a second exchange or a paper account showed misleading numbers.
+- **History badge counts only the selected account.** The "new closed positions" badge now counts closed positions for the account you're viewing, instead of mixing in closed positions from all of your accounts.
+- **Donation report errors are no longer silent.** If submitting a donation report fails, the modal now shows an error message instead of quietly doing nothing; a missing donation-goal bar is logged rather than swallowed.
+
+### Changed
+- **Faster portfolio and price loading.** Per-coin price lookups and multi-timeframe candle fetches now run concurrently instead of one after another, cutting cold-load latency; closed-trade P&L for non-Coinbase accounts is now computed with a bounded database aggregate instead of loading the entire trade history into memory.
+- **More resilient trading-process failover.** If the shared lock that ensures exactly one trading process can't be renewed due to a Redis hiccup, the process now retries within the lock's lifetime and fails safe (stops trading) once the lock could have expired, instead of silently stopping its own renewal.
+
+### Internal
+- Consolidated the BTC/USD fallback price used in P&L conversion into a single shared constant + helper (was copied across five places and could drift), with a warning log when it's used. Surfaced a previously-silent edge case in safety-order base sizing via a debug log. Split the report-scheduler timing math into its own module and memoized several React context values to reduce re-renders. No user-visible change.
+
 ## [v3.14.10] - 2026-06-27
 
 ### Changed
