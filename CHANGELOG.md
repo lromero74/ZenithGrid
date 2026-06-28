@@ -5,6 +5,11 @@ All notable changes to BTC-Bot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v3.14.12] - 2026-06-27
+
+### Internal
+- Split the oversized bot-monitor module (it had grown past the project's per-file size limit) by extracting two self-contained pieces — the in-memory "rebalancer gate" state and the trading-pair availability/category filters — into their own modules. The live trading loop itself is unchanged; this is purely a maintainability cleanup. No user-visible change.
+
 ## [v3.14.11] - 2026-06-27
 
 ### Fixed
