@@ -6,6 +6,12 @@ Centralized constants for trading pairs, timeframes, etc.
 
 from typing import Dict
 
+# Last-resort BTC/USD price used only when a closed BTC-pair position stored
+# neither a close-time nor open-time BTC price. Single source of truth — every
+# BTC-denominated P&L conversion that needs a fallback must use this symbol via
+# pnl_service.resolve_btc_usd_price(), never an inline literal that can drift.
+FALLBACK_BTC_USD_PRICE: float = 100_000.0
+
 USD_EQUIVALENT_CURRENCIES = frozenset({
     "USD",
     "USDC",

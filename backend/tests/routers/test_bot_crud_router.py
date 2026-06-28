@@ -899,3 +899,71 @@ class TestGetCoinbaseFromDb:
 
         with pytest.raises(ExchangeUnavailableError):
             await get_coinbase_from_db(db_session, user_id=user.id)
+
+
+class TestBuildAccountBudgetAggregates:
+    """Budget aggregates must be scoped per account (CLAUDE rule 12): a bot's
+    budget reflects ITS OWN account's balance, never the default account's."""
+
+    @pytest.mark.asyncio
+    async def test_scopes_aggregates_per_account(self):
+        from types import SimpleNamespace
+        from app.bot_routers.bot_crud_router import build_account_budget_aggregates
+
+        bot_a = SimpleNamespace(account_id=1)
+        bot_b = SimpleNamespace(account_id=2)
+        client_a, client_b = object(), object()
+
+        async def _factory(db, acct_id):
+            return {1: client_a, 2: client_b}[acct_id]
+
+        async def _agg(client):
+            return {client_a: (1.0, 100000.0), client_b: (0.1, 10000.0)}[client]
+
+        with patch("app.bot_routers.bot_crud_router.get_exchange_client_for_account",
+                   new=AsyncMock(side_effect=_factory)), \
+             patch("app.bot_routers.bot_crud_router.fetch_aggregate_values",
+                   new=AsyncMock(side_effect=_agg)):
+            result = await build_account_budget_aggregates(
+                db=None, bots=[bot_a, bot_b], default_aggregates=(9.0, 9.0)
+            )
+
+        assert result[1] == (1.0, 100000.0)
+        assert result[2] == (0.1, 10000.0)
+
+    @pytest.mark.asyncio
+    async def test_falls_back_to_default_when_client_unavailable(self):
+        from types import SimpleNamespace
+        from app.bot_routers.bot_crud_router import build_account_budget_aggregates
+        from app.exceptions import ExchangeUnavailableError
+
+        bot_a = SimpleNamespace(account_id=1)
+
+        async def _factory(db, acct_id):
+            raise ExchangeUnavailableError("no creds")
+
+        with patch("app.bot_routers.bot_crud_router.get_exchange_client_for_account",
+                   new=AsyncMock(side_effect=_factory)), \
+             patch("app.bot_routers.bot_crud_router.fetch_aggregate_values",
+                   new=AsyncMock(return_value=(2.0, 2.0))):
+            result = await build_account_budget_aggregates(
+                db=None, bots=[bot_a], default_aggregates=(9.0, 9.0)
+            )
+
+        assert result[1] == (9.0, 9.0)
+
+    @pytest.mark.asyncio
+    async def test_ignores_bots_without_account(self):
+        from types import SimpleNamespace
+        from app.bot_routers.bot_crud_router import build_account_budget_aggregates
+
+        bot = SimpleNamespace(account_id=None)
+        with patch("app.bot_routers.bot_crud_router.get_exchange_client_for_account",
+                   new=AsyncMock()), \
+             patch("app.bot_routers.bot_crud_router.fetch_aggregate_values",
+                   new=AsyncMock()):
+            result = await build_account_budget_aggregates(
+                db=None, bots=[bot], default_aggregates=(9.0, 9.0)
+            )
+
+        assert result == {}

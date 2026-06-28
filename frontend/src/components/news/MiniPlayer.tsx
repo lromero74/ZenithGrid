@@ -224,28 +224,10 @@ export function MiniPlayer() {
     setDuration(0)
   }, [currentVideo?.video_id])
 
-  // Listen for YouTube video end events to auto-advance playlist
-  useEffect(() => {
-    const handleMessage = (event: MessageEvent) => {
-      if (event.origin !== 'https://www.youtube.com') return
-
-      try {
-        const data = typeof event.data === 'string' ? JSON.parse(event.data) : event.data
-
-        // YouTube Player API: playerState 0 = ended
-        // Extract playerState from either message format (only once to prevent double-advance)
-        const playerState = data.info?.playerState ?? (data.event === 'onStateChange' ? data.info : null)
-        if (playerState === 0) {
-          nextVideo()
-        }
-      } catch {
-        // Not JSON, ignore
-      }
-    }
-
-    window.addEventListener('message', handleMessage)
-    return () => window.removeEventListener('message', handleMessage)
-  }, [nextVideo])
+  // Note: auto-advance on video-end is handled by VideoPlayerProvider's single
+  // 'message' listener (which also marks the video seen). MiniPlayer must NOT add
+  // its own end-listener — two listeners both calling nextVideo() double-advance
+  // the playlist (the provider's debounce only masks it).
 
   // Subscribe to YouTube iframe events when iframe loads
   useEffect(() => {

@@ -1,4 +1,4 @@
-import { useState, useEffect, ReactNode } from 'react'
+import { useState, useEffect, useCallback, useMemo, ReactNode } from 'react'
 import { BrandContext, type BrandConfig } from './BrandContext'
 
 const DEFAULTS: BrandConfig = {
@@ -45,11 +45,16 @@ export function BrandProvider({ children }: { children: ReactNode }) {
     }
   }, [brandLoaded, brand.shortName, brand.tagline])
 
-  const brandImageUrl = (filename: string) =>
-    filename ? `/api/brand/images/${encodeURIComponent(filename)}` : ''
+  const brandImageUrl = useCallback((filename: string) =>
+    filename ? `/api/brand/images/${encodeURIComponent(filename)}` : '', [])
+
+  const value = useMemo(
+    () => ({ brand, brandLoaded, brandImageUrl }),
+    [brand, brandLoaded, brandImageUrl]
+  )
 
   return (
-    <BrandContext.Provider value={{ brand, brandLoaded, brandImageUrl }}>
+    <BrandContext.Provider value={value}>
       {children}
     </BrandContext.Provider>
   )

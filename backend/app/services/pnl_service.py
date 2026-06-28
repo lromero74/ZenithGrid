@@ -1,5 +1,31 @@
 """PnL calculation service — extracted from Position model."""
 
+import logging
+
+from app.constants import FALLBACK_BTC_USD_PRICE
+
+logger = logging.getLogger(__name__)
+
+
+def resolve_btc_usd_price(position) -> float:
+    """Return the BTC/USD price to convert a position's USD P&L into BTC.
+
+    Prefers the price stored at close, then at open. Only when a closed BTC-pair
+    position recorded neither does this fall back to the fixed
+    ``FALLBACK_BTC_USD_PRICE`` — and logs a warning, because that path silently
+    distorts BTC-denominated P&L and should be rare for real positions.
+    Single source of truth for the fallback (CLAUDE.md rule 13).
+    """
+    price = getattr(position, "btc_usd_price_at_close", None) \
+        or getattr(position, "btc_usd_price_at_open", None)
+    if price and price > 0:
+        return price
+    logger.warning(
+        "No stored BTC/USD price for position %s; using fallback %.1f for BTC P&L conversion",
+        getattr(position, "id", "?"), FALLBACK_BTC_USD_PRICE,
+    )
+    return FALLBACK_BTC_USD_PRICE
+
 
 def calculate_realized_spot_profit(
     total_quote_spent: float,

@@ -5,6 +5,7 @@ Provides portfolio calculation functions for CEX and DEX accounts,
 balance retrieval, and portfolio conversion orchestration.
 """
 
+import asyncio
 import logging
 from app.utils.timeutil import utcnow
 from typing import Optional
@@ -382,6 +383,25 @@ async def get_generic_cex_portfolio(
     total_usd_value = 0.0
     total_btc_value = 0.0
 
+    # Pre-fetch USD prices for every non-stable, non-BTC holding concurrently —
+    # was a serial get_current_price per altcoin (N exchange round-trips).
+    priced_currencies = sorted({
+        coin_acct.get("currency", "")
+        for coin_acct in coin_accounts
+        if coin_acct.get("currency", "") not in ("USD", "USDC", "USDT", "BTC")
+        and coin_acct.get("currency", "")
+        and (float(coin_acct.get("available_balance", {}).get("value", "0"))
+             + float(coin_acct.get("hold", {}).get("value", "0"))) >= 0.000001
+    })
+
+    async def _price_for(currency: str):
+        try:
+            return currency, await exchange.get_current_price(f"{currency}-USD")
+        except Exception:
+            return currency, None  # unpriceable — skipped below
+
+    altcoin_prices = dict(await asyncio.gather(*[_price_for(c) for c in priced_currencies]))
+
     for coin_acct in coin_accounts:
         currency = coin_acct.get("currency", "")
         avail_val = coin_acct.get("available_balance", {}).get("value", "0")
@@ -407,15 +427,14 @@ async def get_generic_cex_portfolio(
             btc_value = total_balance
             current_price_usd = btc_usd_price
         else:
-            # Try to get price for other coins
-            try:
-                price = await exchange.get_current_price(f"{currency}-USD")
-                if price > 0:
-                    current_price_usd = price
-                    usd_value = total_balance * price
-                    btc_value = usd_value / btc_usd_price if btc_usd_price > 0 else 0
-            except Exception:
-                continue  # skip coins we can't price
+            # Use the concurrently pre-fetched price; skip coins we can't price.
+            price = altcoin_prices.get(currency)
+            if price and price > 0:
+                current_price_usd = price
+                usd_value = total_balance * price
+                btc_value = usd_value / btc_usd_price if btc_usd_price > 0 else 0
+            else:
+                continue
 
         if usd_value < 0.01:
             continue
@@ -455,20 +474,15 @@ async def get_generic_cex_portfolio(
 
     portfolio_holdings.sort(key=lambda x: x["usd_value"], reverse=True)
 
-    # Get position P&L from database (strictly scoped to this account)
+    # Get open positions for this account (strictly scoped). Closed-position P&L
+    # is computed via a bounded SQL aggregate below — never load the full,
+    # ever-growing closed history into memory.
     positions_q = select(Position).where(
         Position.status == "open",
         Position.account_id == account.id,
     )
-    closed_q = select(Position).where(
-        Position.status == "closed",
-        Position.account_id == account.id,
-    )
-
     open_result = await db.execute(positions_q)
     open_positions = open_result.scalars().all()
-    closed_result = await db.execute(closed_q)
-    closed_positions = closed_result.scalars().all()
 
     # Tally in-positions value
     total_in_positions_usd = 0.0
@@ -480,19 +494,9 @@ async def get_generic_cex_portfolio(
         else:
             total_in_positions_btc += pos.total_quote_spent
 
-    # Calculate realized P&L
-    now = utcnow()
-    start_of_today = now.replace(hour=0, minute=0, second=0, microsecond=0)
-    pnl_all_time = {"usd": 0.0, "btc": 0.0, "usdc": 0.0}
-    pnl_today = {"usd": 0.0, "btc": 0.0, "usdc": 0.0}
-
-    for pos in closed_positions:
-        if pos.profit_quote is not None:
-            quote = pos.get_quote_currency()
-            key = quote.lower() if quote in ("USD", "BTC", "USDC") else "usd"
-            pnl_all_time[key] += pos.profit_quote
-            if pos.closed_at and pos.closed_at >= start_of_today:
-                pnl_today[key] += pos.profit_quote
+    # Realized P&L via a bounded SQL aggregate (one row per pair, not per closed
+    # position) — same source of truth the Coinbase path uses.
+    pnl_all_time, pnl_today = await _query_closed_pnl(db, [account.id])
 
     # Bot reservations
     bots_q = select(Bot).where(Bot.account_id == account.id)

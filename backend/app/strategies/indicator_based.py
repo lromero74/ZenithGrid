@@ -772,7 +772,15 @@ class IndicatorBasedStrategy(IndicatorCalculationMixin, TradingStrategy):
                 if q > 0:
                     return q
             except (TypeError, ValueError):
-                pass
+                # Malformed/absent quote_amount on the recorded entry trade. We
+                # fall back to 0.0 (caller re-derives the base size), but surface
+                # it: a silent 0 here cascades into zero-sized safety orders.
+                logger.debug(
+                    "Position %s entry trade has unusable quote_amount=%r; "
+                    "base-order size falls back to 0.0",
+                    getattr(position, "id", "?"), getattr(first, "quote_amount", None),
+                    exc_info=True,
+                )
         return 0.0
 
     def _manual_base_order_size(self, position: Any, safety_orders_count: int) -> float:

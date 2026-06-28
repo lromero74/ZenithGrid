@@ -670,3 +670,40 @@ class TestClosedTodayCount:
         """Edge case: no positions → zero today."""
         result = self._count_closed_today([])
         assert len(result) == 0
+
+
+class TestGetOpenPositionProductsAccess:
+    """get_open_position_products must include open positions on SHARED accounts
+    the user manages, not just owned accounts (so prices prefetch for them)."""
+
+    @pytest.mark.asyncio
+    async def test_includes_shared_account_positions(self, db_session):
+        from app.models import Account, Position, User
+        from app.models.sharing import AccountMembership
+        from app.services.bot_stats_service import get_open_position_products
+
+        owner = User(email="owner_gopp@example.com", hashed_password="x", is_active=True)
+        manager = User(email="manager_gopp@example.com", hashed_password="x", is_active=True)
+        db_session.add_all([owner, manager])
+        await db_session.flush()
+
+        owned = Account(user_id=manager.id, name="Owned", type="cex", is_active=True)
+        shared = Account(user_id=owner.id, name="Shared", type="cex", is_active=True)
+        db_session.add_all([owned, shared])
+        await db_session.flush()
+
+        # manager is granted manager access to the owner's 'shared' account
+        db_session.add(AccountMembership(
+            account_id=shared.id, user_id=manager.id, role="manager",
+            invited_by_user_id=owner.id, expires_at=None,
+        ))
+        # open positions on each account
+        db_session.add_all([
+            Position(account_id=owned.id, user_id=manager.id, product_id="AAA-USD", status="open"),
+            Position(account_id=shared.id, user_id=owner.id, product_id="BBB-USD", status="open"),
+        ])
+        await db_session.flush()
+
+        _, products = await get_open_position_products(db_session, manager.id)
+        assert "AAA-USD" in products       # owned
+        assert "BBB-USD" in products       # shared/managed — was previously missed

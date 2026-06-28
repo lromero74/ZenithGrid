@@ -12,6 +12,7 @@ Phases:
   5. _execute_trades() - Process existing positions and open new deals
 """
 
+import asyncio
 import logging
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -164,12 +165,19 @@ async def _fetch_indicator_candles(
         "SIX_HOUR": 100, "ONE_DAY": 100,
     }
 
-    candles_by_timeframe = {}
-    for timeframe in timeframes_needed:
-        lookback = lookback_map.get(timeframe, 100)
-        tf_candles = await monitor.get_candles_cached(
-            product_id=product_id, granularity=timeframe, lookback_candles=lookback
+    # Fetch all timeframes concurrently — on a cold cache this turns N serial
+    # exchange round-trips into one (the candle cache is already concurrency-safe,
+    # since multiple bots hit it at once under multi_bot_monitor).
+    results = await asyncio.gather(*[
+        monitor.get_candles_cached(
+            product_id=product_id, granularity=tf,
+            lookback_candles=lookback_map.get(tf, 100),
         )
+        for tf in timeframes_needed
+    ])
+
+    candles_by_timeframe = {}
+    for timeframe, tf_candles in zip(timeframes_needed, results):
         if tf_candles:
             logger.info(f"    Got {len(tf_candles)} candles for {timeframe}")
             candles_by_timeframe[timeframe] = tf_candles

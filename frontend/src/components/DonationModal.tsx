@@ -57,12 +57,17 @@ export function DonationModal({ isOpen, onClose }: DonationModalProps) {
   const [reportRef, setReportRef] = useState('')
   const [reportSubmitting, setReportSubmitting] = useState(false)
   const [reportSuccess, setReportSuccess] = useState(false)
+  const [reportError, setReportError] = useState<string | null>(null)
 
   useEffect(() => {
     if (isOpen) {
-      donationsApi.getGoal().then(setGoal).catch(() => {})
+      donationsApi.getGoal().then(setGoal).catch((e) => {
+        // Goal bar is non-critical — degrade quietly but keep it observable in logs.
+        console.warn('Donation goal unavailable:', e)
+      })
       setShowReport(false)
       setReportSuccess(false)
+      setReportError(null)
     }
   }, [isOpen])
 
@@ -88,6 +93,7 @@ export function DonationModal({ isOpen, onClose }: DonationModalProps) {
     if (!amount || amount <= 0) return
 
     setReportSubmitting(true)
+    setReportError(null)
     try {
       await donationsApi.reportDonation({
         amount,
@@ -99,9 +105,12 @@ export function DonationModal({ isOpen, onClose }: DonationModalProps) {
       // Don't bother them again this quarter — they donated
       localStorage.setItem(DONATION_DISMISSED_QUARTER_KEY, getCurrentQuarter())
       // Refresh goal
-      donationsApi.getGoal().then(setGoal).catch(() => {})
-    } catch {
-      // Error handled silently
+      donationsApi.getGoal().then(setGoal).catch((e) => {
+        console.warn('Donation goal refresh failed:', e)
+      })
+    } catch (e) {
+      // User-facing action — surface the failure instead of swallowing it.
+      setReportError(e instanceof Error ? e.message : 'Could not submit your report. Please try again.')
     } finally {
       setReportSubmitting(false)
     }
@@ -275,6 +284,9 @@ export function DonationModal({ isOpen, onClose }: DonationModalProps) {
                   >
                     {reportSubmitting ? 'Submitting...' : 'Submit Report'}
                   </button>
+                  {reportError && (
+                    <p className="text-sm text-red-400 text-center" role="alert">{reportError}</p>
+                  )}
                 </div>
               )}
             </div>

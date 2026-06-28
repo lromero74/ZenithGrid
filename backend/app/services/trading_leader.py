@@ -4,6 +4,7 @@ import asyncio
 import inspect
 import logging
 import os
+import time
 from collections.abc import Awaitable, Callable
 from uuid import uuid4
 
@@ -63,22 +64,48 @@ class TradingLeaderLease:
         logger.info("Trading leader lease acquired (ttl=%ss)", self.ttl_seconds)
 
     async def _renew_loop(self) -> None:
+        last_ok = time.monotonic()
         while True:
             await asyncio.sleep(self.renew_interval_seconds)
-            renewed = await self.redis.eval(
-                _RENEW_SCRIPT,
-                1,
-                self.key,
-                self.token,
-                self.ttl_seconds,
-            )
+            try:
+                renewed = await self.redis.eval(
+                    _RENEW_SCRIPT,
+                    1,
+                    self.key,
+                    self.token,
+                    self.ttl_seconds,
+                )
+            except Exception as exc:
+                # A transient Redis error must NOT silently kill renewal (the
+                # task would die while the process still believes it's leader).
+                # The lease may still be valid until its TTL, so retry on the
+                # next tick — but once we can no longer have renewed within the
+                # TTL window, the key has expired and another process may claim
+                # it, so fail closed.
+                elapsed = time.monotonic() - last_ok
+                if elapsed >= self.ttl_seconds:
+                    logger.critical(
+                        "Trading leader renewal failing for %.0fs (>= ttl %ss); "
+                        "fail-closed: %s", elapsed, self.ttl_seconds, exc,
+                    )
+                    await self._fire_lease_lost()
+                    return
+                logger.warning(
+                    "Trading leader renewal error (%.0fs since last success); will retry: %s",
+                    elapsed, exc,
+                )
+                continue
             if renewed:
+                last_ok = time.monotonic()
                 continue
             logger.critical("Trading leader lease lost; terminating fail-closed")
-            result = self.on_lease_lost()
-            if inspect.isawaitable(result):
-                await result
+            await self._fire_lease_lost()
             return
+
+    async def _fire_lease_lost(self) -> None:
+        result = self.on_lease_lost()
+        if inspect.isawaitable(result):
+            await result
 
     async def wait_until_stopped(self) -> None:
         if self._renew_task is not None:

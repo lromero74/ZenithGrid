@@ -376,6 +376,7 @@
       "_apply_risk_preset_defaults",
       "_bot_write_filter",
       "_get_paper_account",
+      "build_account_budget_aggregates",
       "clone_bot",
       "copy_bot_to_account",
       "create_bot",
@@ -3146,7 +3147,8 @@
       "calculate_realized_short_profit",
       "calculate_realized_spot_profit",
       "fee_adjusted_tp_floor",
-      "position_exit_fee_rate"
+      "position_exit_fee_rate",
+      "resolve_btc_usd_price"
     ]
   },
   "backend/app/services/portfolio_calculations.py": {
@@ -3438,36 +3440,41 @@
       "update_schedule_record"
     ]
   },
-  "backend/app/services/report_scheduler.py": {
+  "backend/app/services/report_schedule_timing.py": {
     "classes": {},
     "functions": [
-      "_advance_schedule_timing",
       "_at_run_time",
-      "_attach_goal_trend_data",
-      "_compute_expense_changes",
       "_compute_full_prior_bounds",
       "_compute_next_run_legacy",
       "_compute_period_bounds_legacy",
-      "_compute_report_period",
-      "_deliver_report",
-      "_fetch_account_name",
-      "_fetch_schedule_goals",
       "_format_period_label",
       "_last_day_of_month",
-      "_mark_report_failed",
-      "_normalize_recipient",
       "_ordinal",
       "_parse_schedule_days",
-      "_reap_orphaned_pending_reports",
       "_resolve_day_of_month",
-      "_run_manual_generation_bg",
       "_should_auto_prior",
-      "_spawn_bg",
       "build_periodicity_label",
       "compute_next_run_at",
       "compute_next_run_flexible",
       "compute_period_bounds",
-      "compute_period_bounds_flexible",
+      "compute_period_bounds_flexible"
+    ]
+  },
+  "backend/app/services/report_scheduler.py": {
+    "classes": {},
+    "functions": [
+      "_advance_schedule_timing",
+      "_attach_goal_trend_data",
+      "_compute_expense_changes",
+      "_compute_report_period",
+      "_deliver_report",
+      "_fetch_account_name",
+      "_fetch_schedule_goals",
+      "_mark_report_failed",
+      "_normalize_recipient",
+      "_reap_orphaned_pending_reports",
+      "_run_manual_generation_bg",
+      "_spawn_bg",
       "generate_report_for_schedule",
       "run_report_scheduler_once",
       "start_manual_report_generation"
@@ -3650,6 +3657,7 @@
     "classes": {
       "TradingLeaderLease": [
         "__init__",
+        "_fire_lease_lost",
         "_renew_loop",
         "acquire",
         "release",

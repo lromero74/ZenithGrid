@@ -2,6 +2,7 @@
 import pytest
 from unittest.mock import MagicMock
 from types import SimpleNamespace
+from app.constants import FALLBACK_BTC_USD_PRICE
 from app.services.pnl_service import (
     DEFAULT_TAKER_FEE_RATE,
     calculate_profit,
@@ -9,7 +10,26 @@ from app.services.pnl_service import (
     calculate_realized_spot_profit,
     fee_adjusted_tp_floor,
     position_exit_fee_rate,
+    resolve_btc_usd_price,
 )
+
+
+class TestResolveBtcUsdPrice:
+    def test_prefers_close_price(self):
+        pos = SimpleNamespace(btc_usd_price_at_close=120000.0, btc_usd_price_at_open=90000.0)
+        assert resolve_btc_usd_price(pos) == 120000.0
+
+    def test_falls_back_to_open_when_close_missing(self):
+        pos = SimpleNamespace(btc_usd_price_at_close=None, btc_usd_price_at_open=90000.0)
+        assert resolve_btc_usd_price(pos) == 90000.0
+
+    def test_zero_close_falls_through_to_open(self):
+        pos = SimpleNamespace(btc_usd_price_at_close=0.0, btc_usd_price_at_open=90000.0)
+        assert resolve_btc_usd_price(pos) == 90000.0
+
+    def test_uses_constant_when_both_missing(self):
+        pos = SimpleNamespace(btc_usd_price_at_close=None, btc_usd_price_at_open=None)
+        assert resolve_btc_usd_price(pos) == FALLBACK_BTC_USD_PRICE
 
 
 class TestCalculateProfit:
