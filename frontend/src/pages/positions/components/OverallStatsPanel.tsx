@@ -1,5 +1,5 @@
 import { Balances } from '../../../types'
-import { useState, useEffect, useMemo, useCallback } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 
 export interface CompletedStats {
   total_profit_btc: number
@@ -80,7 +80,7 @@ export const OverallStatsPanel = ({ stats, completedStats, realizedPnL, balances
 
 
   // Get the selected historical period's data
-  const getHistoricalData = useCallback(() => {
+  const historicalData = useMemo(() => {
     if (!realizedPnL) return EMPTY_PERIOD
     switch (selectedHistorical) {
       case 'yesterday':
@@ -97,7 +97,7 @@ export const OverallStatsPanel = ({ stats, completedStats, realizedPnL, balances
   }, [realizedPnL, selectedHistorical])
 
   // Get the selected to-date period's data
-  const getToDateData = useCallback(() => {
+  const toDateData = useMemo(() => {
     if (!realizedPnL) return EMPTY_PERIOD
     switch (selectedToDate) {
       case 'wtd':
@@ -112,7 +112,7 @@ export const OverallStatsPanel = ({ stats, completedStats, realizedPnL, balances
   }, [realizedPnL, selectedToDate])
 
   // Get cumulative (all-time or net) data
-  const getCumulativeData = useCallback(() => {
+  const cumulativeData = useMemo(() => {
     if (!realizedPnL) return EMPTY_PERIOD
     const allByQuote = realizedPnL.alltime_profit_by_quote || {}
     const allUsd = realizedPnL.alltime_profit_usd ?? 0
@@ -149,10 +149,6 @@ export const OverallStatsPanel = ({ stats, completedStats, realizedPnL, balances
       </span>
     )
   }
-
-  const historicalData = useMemo(() => getHistoricalData(), [getHistoricalData])
-  const toDateData = useMemo(() => getToDateData(), [getToDateData])
-  const cumulativeData = useMemo(() => getCumulativeData(), [getCumulativeData])
 
   return (
     <div className="bg-slate-800 rounded-lg border border-slate-700 p-3 sm:p-6 mb-4">

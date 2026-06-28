@@ -80,7 +80,7 @@ export function VideoPlayerProvider({ children }: VideoPlayerProviderProps) {
 
   // Register with media coordinator for mutual exclusion with article reader
   useEffect(() => {
-    registerVideoPlayer(stopPlaylist)
+    return registerVideoPlayer(stopPlaylist)
   }, [stopPlaylist])
 
   // Play specific video in playlist

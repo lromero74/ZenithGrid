@@ -16,12 +16,22 @@ const coordinator: MediaCoordinator = {
   articleStop: null,
 }
 
-export function registerVideoPlayer(stopFn: StopFunction) {
+/** Register the video player's stop fn. Returns an unregister cleanup that
+ *  clears the slot only if it still points at this fn (so a newer registration
+ *  isn't clobbered by a late-unmounting older one). */
+export function registerVideoPlayer(stopFn: StopFunction): () => void {
   coordinator.videoStop = stopFn
+  return () => {
+    if (coordinator.videoStop === stopFn) coordinator.videoStop = null
+  }
 }
 
-export function registerArticleReader(stopFn: StopFunction) {
+/** Register the article reader's stop fn. Returns an unregister cleanup. */
+export function registerArticleReader(stopFn: StopFunction): () => void {
   coordinator.articleStop = stopFn
+  return () => {
+    if (coordinator.articleStop === stopFn) coordinator.articleStop = null
+  }
 }
 
 export function stopVideoPlayer() {
