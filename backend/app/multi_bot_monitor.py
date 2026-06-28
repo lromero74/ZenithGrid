@@ -14,7 +14,7 @@ from app.utils.timeutil import utcnow
 import contextvars
 import logging
 import time
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 from sqlalchemy import select
 from sqlalchemy.exc import DBAPIError
@@ -445,6 +445,158 @@ class MultiBotMonitor:
             logger.error(f"Error fetching candles for {product_id} ({granularity}): {e}")
             return []
 
+    async def _resolve_scannable_pairs(
+        self, db: AsyncSession, bot: Bot, trading_pairs: list, pairs_with_positions: set,
+    ) -> Tuple[list, Optional[Dict[str, Any]]]:
+        """Narrow a bot's trading pairs to those that should be scanned this
+        cycle: drop delisted/stable/disallowed pairs (keeping pairs with open
+        positions), then apply the stopped-bot and rebalancer/overweight gates.
+
+        Returns (trading_pairs, early_result); when early_result is not None the
+        caller returns it immediately (nothing to scan).
+        """
+        # Skip configured products Coinbase no longer lists before reaching candle
+        # fetches. Existing positions are preserved so they can still be managed.
+        available_products = await get_available_trading_products(db)
+        if available_products:
+            before_count = len(trading_pairs)
+            trading_pairs = [
+                p for p in trading_pairs
+                if p in available_products or p in pairs_with_positions
+            ]
+            skipped = before_count - len(trading_pairs)
+            if skipped:
+                logger.warning(
+                    "  Skipped %d unavailable/delisted configured pair(s) for %s",
+                    skipped, bot.name,
+                )
+            if not trading_pairs:
+                logger.info("  No listed trading pairs to scan after availability filter")
+                return trading_pairs, {"action": "skip", "reason": "No listed trading pairs to scan"}
+
+        # Filter out stable/pegged pairs if bot config says to skip them
+        skip_stable = bot.strategy_config.get("skip_stable_pairs", True) if bot.strategy_config else True
+        if skip_stable:
+            from app.services.delisted_pair_monitor import is_stable_pair
+            before_count = len(trading_pairs)
+            trading_pairs = [
+                p for p in trading_pairs
+                if not is_stable_pair(p) or p in pairs_with_positions
+            ]
+            skipped = before_count - len(trading_pairs)
+            if skipped:
+                logger.info(f"  Skipped {skipped} stable/pegged pairs")
+
+        # Filter pairs by allowed categories (bot-level control)
+        # BUT always include pairs with existing positions
+        allowed_categories = bot.strategy_config.get("allowed_categories") if bot.strategy_config else None
+        if allowed_categories:
+            filtered_pairs = await filter_pairs_by_allowed_categories(
+                db, trading_pairs, allowed_categories, user_id=bot.user_id
+            )
+            # Add back any pairs with open positions (must monitor existing positions!)
+            trading_pairs = list(set(filtered_pairs) | pairs_with_positions)
+            logger.debug(f"After category filter: {len(trading_pairs)} trading pairs: {trading_pairs}")
+            if pairs_with_positions - set(filtered_pairs):
+                extra = len(pairs_with_positions - set(filtered_pairs))
+                logger.info(
+                    f"  Including {extra} pairs with open positions"
+                    " despite category filter"
+                )
+
+        logger.info(
+            f"Processing bot: {bot.name} with {len(trading_pairs)} pair(s): {trading_pairs} ({bot.strategy_type})"
+        )
+
+        # If bot is stopped, filter to only pairs with open positions (for DCA/exit)
+        if not bot.is_active:
+            trading_pairs = [p for p in trading_pairs if p in pairs_with_positions]
+            logger.info(f"  ⏸️  Bot is STOPPED - filtered to {len(trading_pairs)} pairs with open positions")
+            if len(trading_pairs) == 0:
+                logger.info("  ℹ️  No open positions to manage - skipping analysis")
+                return trading_pairs, {"action": "skip", "reason": "Bot stopped with no open positions"}
+
+        # Rebalancer gate: if the account is rebalancing and this bot's quote
+        # currency is overweight, block new base orders by restricting to pairs
+        # with existing positions only (DCA safety orders + take-profits still run).
+        # Grid bots are exempt — their entry range is planned at creation time.
+        if (bot.strategy_type != "grid"
+                and bot.account_id is not None
+                and trading_pairs):
+            # Extract quote currency from the first trading pair (e.g. "BTC-USDC" → "USDC")
+            _first_pair = trading_pairs[0] if trading_pairs else ""
+            _parts = _first_pair.split("-")
+            _quote_cur = _parts[1] if len(_parts) == 2 else None
+            # Only act when fresh allocation data is available from the rebalancer.
+            # If the cache has expired (e.g., between check intervals), leave the
+            # gated state unchanged rather than failing open and dropping the badge.
+            _gate_data = _get_account_gate_data(bot.account_id) if _quote_cur else None
+            if _gate_data is not None and _quote_cur:
+                if _quote_is_overweight(bot.account_id, _quote_cur):
+                    before = len(trading_pairs)
+                    trading_pairs = [p for p in trading_pairs if p in pairs_with_positions]
+                    mark_gated(bot.id)
+                    if len(trading_pairs) < before:
+                        logger.info(
+                            f"  ⏸ Rebalancer gate: {bot.name} — {_quote_cur} is overweight, "
+                            f"blocking new base orders ({before - len(trading_pairs)} pair(s) held back)"
+                        )
+                        # Write a scanner log entry so the user can see gate activity
+                        from app.models import ScannerLog
+                        db.add(ScannerLog(
+                            bot_id=bot.id,
+                            product_id=_quote_cur,
+                            scan_type="rebalancer_gate",
+                            decision="blocked",
+                            reason=f"{_quote_cur} overweight — new base orders blocked until rebalanced",
+                        ))
+                        await db.flush()
+                    if not trading_pairs:
+                        return trading_pairs, {
+                            "action": "skip",
+                            "reason": "Rebalancer gate: no open positions to manage",
+                        }
+                else:
+                    # Fresh data says not overweight — clear the gate
+                    clear_gated(bot.id)
+
+        # Bot-level rebalancer overweight gate
+        # Blocks new base orders when this bot's actual deployed capital exceeds
+        # its target allocation + tolerance.  Grid bots and bots with no target are exempt.
+        if (bot.bot_rebalancer_enabled
+                and bot.strategy_type != "grid"
+                and bot.bot_rebalancer_target_pct > 0
+                and bot.account_id is not None):
+            _group = await get_bot_rebalancer_group(
+                db, bot.account_id, bot.get_quote_currency()
+            )
+            _tolerance = _group.overweight_tolerance_pct if _group else 5.0
+            # Without live portfolio values in the monitor, we approximate actual_pct
+            # from budget_utilization_percentage (set by the bot list endpoint).
+            # If not yet available, default to 0 (no gating until data is fresh).
+            _budget_util = getattr(bot, '_monitor_budget_utilization', 0.0) or 0.0
+            _actual_pct = (
+                _budget_util * (bot.budget_percentage / 100.0)
+                if bot.budget_percentage > 0 else 0.0
+            )
+            if _actual_pct > bot.bot_rebalancer_target_pct + _tolerance:
+                mark_overweight(bot.id)
+                trading_pairs = [p for p in trading_pairs if p in pairs_with_positions]
+                logger.info(
+                    f"  ⏸ Bot rebalancer: {bot.name} is overweight "
+                    f"({_actual_pct:.1f}% > target {bot.bot_rebalancer_target_pct:.1f}%"
+                    f" + tolerance {_tolerance:.1f}%), blocking new base orders"
+                )
+                if not trading_pairs:
+                    return trading_pairs, {
+                        "action": "skip",
+                        "reason": "Bot rebalancer: overweight — awaiting position wind-down",
+                    }
+            else:
+                clear_overweight(bot.id)
+
+        return trading_pairs, None
+
     async def process_bot(self, db: AsyncSession, bot: Bot, skip_ai_analysis: bool = False) -> Dict[str, Any]:
         """
         Process signals for a single bot across all its trading pairs.
@@ -475,142 +627,11 @@ class MultiBotMonitor:
             open_positions = list(open_pos_result.scalars().all())
             pairs_with_positions = {p.product_id for p in open_positions if p.product_id}
 
-            # Skip configured products Coinbase no longer lists before reaching candle
-            # fetches. Existing positions are preserved so they can still be managed.
-            available_products = await get_available_trading_products(db)
-            if available_products:
-                before_count = len(trading_pairs)
-                trading_pairs = [
-                    p for p in trading_pairs
-                    if p in available_products or p in pairs_with_positions
-                ]
-                skipped = before_count - len(trading_pairs)
-                if skipped:
-                    logger.warning(
-                        "  Skipped %d unavailable/delisted configured pair(s) for %s",
-                        skipped, bot.name,
-                    )
-                if not trading_pairs:
-                    logger.info("  No listed trading pairs to scan after availability filter")
-                    return {"action": "skip", "reason": "No listed trading pairs to scan"}
-
-            # Filter out stable/pegged pairs if bot config says to skip them
-            skip_stable = bot.strategy_config.get("skip_stable_pairs", True) if bot.strategy_config else True
-            if skip_stable:
-                from app.services.delisted_pair_monitor import is_stable_pair
-                before_count = len(trading_pairs)
-                trading_pairs = [
-                    p for p in trading_pairs
-                    if not is_stable_pair(p) or p in pairs_with_positions
-                ]
-                skipped = before_count - len(trading_pairs)
-                if skipped:
-                    logger.info(f"  Skipped {skipped} stable/pegged pairs")
-
-            # Filter pairs by allowed categories (bot-level control)
-            # BUT always include pairs with existing positions
-            allowed_categories = bot.strategy_config.get("allowed_categories") if bot.strategy_config else None
-            if allowed_categories:
-                filtered_pairs = await filter_pairs_by_allowed_categories(
-                    db, trading_pairs, allowed_categories, user_id=bot.user_id
-                )
-                # Add back any pairs with open positions (must monitor existing positions!)
-                trading_pairs = list(set(filtered_pairs) | pairs_with_positions)
-                logger.debug(f"After category filter: {len(trading_pairs)} trading pairs: {trading_pairs}")
-                if pairs_with_positions - set(filtered_pairs):
-                    extra = len(pairs_with_positions - set(filtered_pairs))
-                    logger.info(
-                        f"  Including {extra} pairs with open positions"
-                        " despite category filter"
-                    )
-
-            logger.info(
-                f"Processing bot: {bot.name} with {len(trading_pairs)} pair(s): {trading_pairs} ({bot.strategy_type})"
+            trading_pairs, _early = await self._resolve_scannable_pairs(
+                db, bot, trading_pairs, pairs_with_positions
             )
-
-            # If bot is stopped, filter to only pairs with open positions (for DCA/exit)
-            if not bot.is_active:
-                trading_pairs = [p for p in trading_pairs if p in pairs_with_positions]
-                logger.info(f"  ⏸️  Bot is STOPPED - filtered to {len(trading_pairs)} pairs with open positions")
-                if len(trading_pairs) == 0:
-                    logger.info("  ℹ️  No open positions to manage - skipping analysis")
-                    return {"action": "skip", "reason": "Bot stopped with no open positions"}
-
-            # Rebalancer gate: if the account is rebalancing and this bot's quote
-            # currency is overweight, block new base orders by restricting to pairs
-            # with existing positions only (DCA safety orders + take-profits still run).
-            # Grid bots are exempt — their entry range is planned at creation time.
-            if (bot.strategy_type != "grid"
-                    and bot.account_id is not None
-                    and trading_pairs):
-                # Extract quote currency from the first trading pair (e.g. "BTC-USDC" → "USDC")
-                _first_pair = trading_pairs[0] if trading_pairs else ""
-                _parts = _first_pair.split("-")
-                _quote_cur = _parts[1] if len(_parts) == 2 else None
-                # Only act when fresh allocation data is available from the rebalancer.
-                # If the cache has expired (e.g., between check intervals), leave the
-                # gated state unchanged rather than failing open and dropping the badge.
-                _gate_data = _get_account_gate_data(bot.account_id) if _quote_cur else None
-                if _gate_data is not None and _quote_cur:
-                    if _quote_is_overweight(bot.account_id, _quote_cur):
-                        before = len(trading_pairs)
-                        trading_pairs = [p for p in trading_pairs if p in pairs_with_positions]
-                        mark_gated(bot.id)
-                        if len(trading_pairs) < before:
-                            logger.info(
-                                f"  ⏸ Rebalancer gate: {bot.name} — {_quote_cur} is overweight, "
-                                f"blocking new base orders ({before - len(trading_pairs)} pair(s) held back)"
-                            )
-                            # Write a scanner log entry so the user can see gate activity
-                            from app.models import ScannerLog
-                            db.add(ScannerLog(
-                                bot_id=bot.id,
-                                product_id=_quote_cur,
-                                scan_type="rebalancer_gate",
-                                decision="blocked",
-                                reason=f"{_quote_cur} overweight — new base orders blocked until rebalanced",
-                            ))
-                            await db.flush()
-                        if not trading_pairs:
-                            return {"action": "skip", "reason": "Rebalancer gate: no open positions to manage"}
-                    else:
-                        # Fresh data says not overweight — clear the gate
-                        clear_gated(bot.id)
-
-            # Bot-level rebalancer overweight gate
-            # Blocks new base orders when this bot's actual deployed capital exceeds
-            # its target allocation + tolerance.  Grid bots and bots with no target are exempt.
-            if (bot.bot_rebalancer_enabled
-                    and bot.strategy_type != "grid"
-                    and bot.bot_rebalancer_target_pct > 0
-                    and bot.account_id is not None):
-                _group = await get_bot_rebalancer_group(
-                    db, bot.account_id, bot.get_quote_currency()
-                )
-                _tolerance = _group.overweight_tolerance_pct if _group else 5.0
-                # Without live portfolio values in the monitor, we approximate actual_pct
-                # from budget_utilization_percentage (set by the bot list endpoint).
-                # If not yet available, default to 0 (no gating until data is fresh).
-                _budget_util = getattr(bot, '_monitor_budget_utilization', 0.0) or 0.0
-                _actual_pct = (
-                    _budget_util * (bot.budget_percentage / 100.0)
-                    if bot.budget_percentage > 0 else 0.0
-                )
-                if _actual_pct > bot.bot_rebalancer_target_pct + _tolerance:
-                    mark_overweight(bot.id)
-                    trading_pairs = [p for p in trading_pairs if p in pairs_with_positions]
-                    logger.info(
-                        f"  ⏸ Bot rebalancer: {bot.name} is overweight "
-                        f"({_actual_pct:.1f}% > target {bot.bot_rebalancer_target_pct:.1f}%"
-                        f" + tolerance {_tolerance:.1f}%), blocking new base orders"
-                    )
-                    if not trading_pairs:
-                        return {
-                            "action": "skip",
-                            "reason": "Bot rebalancer: overweight — awaiting position wind-down",
-                        }
-                else:
-                    clear_overweight(bot.id)
+            if _early is not None:
+                return _early
 
             # Check if strategy supports batch analysis (AI strategies)
             # Note: For batch mode, we use bot's current config since batch mode only applies to new analysis
