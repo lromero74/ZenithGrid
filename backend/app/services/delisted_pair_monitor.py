@@ -19,7 +19,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models import Bot, BotProduct, Account
 from app.services.exchange_service import get_exchange_client_for_account
 from app.services.session_maker_mixin import SessionMakerMixin
-from app.multi_bot_monitor import filter_pairs_by_allowed_categories
+from app.monitor.pair_filters import filter_pairs_by_allowed_categories
 from app.utils.candle_utils import get_timeframes_for_phases
 
 logger = logging.getLogger(__name__)

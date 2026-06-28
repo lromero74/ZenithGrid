@@ -1540,6 +1540,13 @@
       "process_bull_flag_bot"
     ]
   },
+  "backend/app/monitor/pair_filters.py": {
+    "classes": {},
+    "functions": [
+      "filter_pairs_by_allowed_categories",
+      "get_available_trading_products"
+    ]
+  },
   "backend/app/monitor/pair_processor.py": {
     "classes": {},
     "functions": [
@@ -1580,13 +1587,7 @@
       ]
     },
     "functions": [
-      "_get_bot_rebalancer_group",
-      "clear_monitor_exchange_cache",
-      "clear_rebalancer_gates_for_account",
-      "filter_pairs_by_allowed_categories",
-      "get_available_trading_products",
-      "is_rebalancer_bot_overweight",
-      "is_rebalancer_gated"
+      "clear_monitor_exchange_cache"
     ]
   },
   "backend/app/news_data/news_cache.py": {
@@ -3277,6 +3278,19 @@
       "compute_allocation",
       "compute_rebalance_status",
       "get_public_prices"
+    ]
+  },
+  "backend/app/services/rebalancer_gates.py": {
+    "classes": {},
+    "functions": [
+      "clear_gated",
+      "clear_overweight",
+      "clear_rebalancer_gates_for_account",
+      "get_bot_rebalancer_group",
+      "is_rebalancer_bot_overweight",
+      "is_rebalancer_gated",
+      "mark_gated",
+      "mark_overweight"
     ]
   },
   "backend/app/services/report_access.py": {

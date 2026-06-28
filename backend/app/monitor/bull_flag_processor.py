@@ -166,8 +166,7 @@ async def process_bull_flag_bot(monitor, db: AsyncSession, bot: Bot) -> Dict[str
         results["opportunities"] = len([o for o in opportunities if o.get("pattern")])
 
         # Filter opportunities by allowed categories
-        # Deferred import to avoid circular dependency (multi_bot_monitor imports this module)
-        from app.multi_bot_monitor import filter_pairs_by_allowed_categories
+        from app.monitor.pair_filters import filter_pairs_by_allowed_categories
 
         allowed_categories = bot.strategy_config.get("allowed_categories") if bot.strategy_config else None
         if allowed_categories and opportunities:

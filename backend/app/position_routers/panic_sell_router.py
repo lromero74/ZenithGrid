@@ -29,7 +29,7 @@ from app.services.portfolio_conversion_service import (
     run_portfolio_conversion,
 )
 from app.services import rebalance_monitor
-from app import multi_bot_monitor
+from app.services import rebalancer_gates
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -298,7 +298,7 @@ async def _execute_panic_sell(
                 # Clear in-memory gate state so bots aren't blocked by stale
                 # rebalancer data (same fix as v2.167.0 for the settings endpoint).
                 rebalance_monitor.clear_account_gate_data(account.id)
-                await multi_bot_monitor.clear_rebalancer_gates_for_account(db, account.id)
+                await rebalancer_gates.clear_rebalancer_gates_for_account(db, account.id)
 
             if stop_auto_buy:
                 account.auto_buy_enabled = False

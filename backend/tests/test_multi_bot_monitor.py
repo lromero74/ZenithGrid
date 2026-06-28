@@ -15,7 +15,6 @@ import pytest
 from app.multi_bot_monitor import (
     MultiBotMonitor,
     clear_monitor_exchange_cache,
-    filter_pairs_by_allowed_categories,
 )
 
 
@@ -782,51 +781,6 @@ class TestStartStop:
 
 
 # ===========================================================================
-# Class: TestFilterPairsByAllowedCategories
-# ===========================================================================
-
-
-class TestFilterPairsByAllowedCategories:
-    """Tests for filter_pairs_by_allowed_categories()."""
-
-    @pytest.mark.asyncio
-    async def test_no_categories_returns_all(self, db_session):
-        pairs = ["ETH-BTC", "SOL-BTC"]
-        result = await filter_pairs_by_allowed_categories(db_session, pairs, None)
-        assert result == pairs
-
-    @pytest.mark.asyncio
-    async def test_empty_categories_returns_all(self, db_session):
-        pairs = ["ETH-BTC", "SOL-BTC"]
-        result = await filter_pairs_by_allowed_categories(db_session, pairs, [])
-        assert result == pairs
-
-    @pytest.mark.asyncio
-    async def test_filters_by_category(self, db_session):
-        """Pairs not in allowed categories are filtered out."""
-        pairs = ["ETH-BTC", "DOGE-BTC"]
-
-        # Create mock blacklist entries
-        mock_eth = MagicMock()
-        mock_eth.symbol = "ETH"
-        mock_eth.reason = "[APPROVED] Solid project"
-        mock_eth.user_id = None
-
-        mock_doge = MagicMock()
-        mock_doge.symbol = "DOGE"
-        mock_doge.reason = "[MEME] Meme coin"
-        mock_doge.user_id = None
-
-        mock_result = MagicMock()
-        mock_result.scalars.return_value.all.return_value = [mock_eth, mock_doge]
-        db_session.execute = AsyncMock(return_value=mock_result)
-
-        result = await filter_pairs_by_allowed_categories(db_session, pairs, ["APPROVED"])
-        assert "ETH-BTC" in result
-        assert "DOGE-BTC" not in result
-
-
-# ===========================================================================
 # Class: TestConcurrentPairProcessing
 # ===========================================================================
 
@@ -1042,110 +996,6 @@ class TestGetActiveBots:
 
 
 # ===========================================================================
-# Class: TestRebalancerFlags
-# ===========================================================================
-
-
-class TestRebalancerFlags:
-    """Tests for is_rebalancer_gated() and is_rebalancer_bot_overweight()."""
-
-    def test_is_rebalancer_gated_false_by_default(self):
-        from app.multi_bot_monitor import is_rebalancer_gated
-        # Use a bot_id unlikely to be set by prior tests
-        assert is_rebalancer_gated(98765) is False
-
-    def test_is_rebalancer_gated_true_when_added(self):
-        import app.multi_bot_monitor as mod
-        from app.multi_bot_monitor import is_rebalancer_gated
-        mod._rebalancer_gated_bots.add(99)
-        try:
-            assert is_rebalancer_gated(99) is True
-        finally:
-            mod._rebalancer_gated_bots.discard(99)
-
-    def test_is_rebalancer_bot_overweight_false_by_default(self):
-        from app.multi_bot_monitor import is_rebalancer_bot_overweight
-        assert is_rebalancer_bot_overweight(98765) is False
-
-    def test_is_rebalancer_bot_overweight_true_when_added(self):
-        import app.multi_bot_monitor as mod
-        from app.multi_bot_monitor import is_rebalancer_bot_overweight
-        mod._rebalancer_bot_overweight.add(77)
-        try:
-            assert is_rebalancer_bot_overweight(77) is True
-        finally:
-            mod._rebalancer_bot_overweight.discard(77)
-
-
-# ===========================================================================
-# Class: TestGetBotRebalancerGroup
-# ===========================================================================
-
-
-class TestGetBotRebalancerGroup:
-    """Tests for _get_bot_rebalancer_group() caching + DB fetch."""
-
-    @pytest.mark.asyncio
-    async def test_fetches_from_db_on_cache_miss(self, db_session):
-        """Happy path: DB query runs on cache miss."""
-        import app.multi_bot_monitor as mod
-        mod._rebalancer_group_cache.clear()
-
-        from app.multi_bot_monitor import _get_bot_rebalancer_group
-
-        # Mock the DB query path: return a fake group
-        fake_group = MagicMock()
-        fake_group.overweight_tolerance_pct = 7.0
-        mock_result = MagicMock()
-        mock_result.scalar_one_or_none.return_value = fake_group
-        db = MagicMock()
-        db.execute = AsyncMock(return_value=mock_result)
-
-        result = await _get_bot_rebalancer_group(db, 42, "USD")
-        assert result is fake_group
-        # Cache is populated
-        assert (42, "USD") in mod._rebalancer_group_cache
-
-    @pytest.mark.asyncio
-    async def test_returns_cached_when_fresh(self, db_session):
-        """Edge case: cached value returned without DB hit."""
-        import time
-        import app.multi_bot_monitor as mod
-        mod._rebalancer_group_cache.clear()
-
-        cached_group = MagicMock()
-        mod._rebalancer_group_cache[(42, "USD")] = (cached_group, time.monotonic())
-
-        from app.multi_bot_monitor import _get_bot_rebalancer_group
-        db = MagicMock()
-        db.execute = AsyncMock(side_effect=RuntimeError("should not be called"))
-
-        result = await _get_bot_rebalancer_group(db, 42, "USD")
-        assert result is cached_group
-        db.execute.assert_not_called()
-
-    @pytest.mark.asyncio
-    async def test_refetches_when_cache_expired(self, db_session):
-        """Edge case: expired cache triggers re-fetch."""
-        import app.multi_bot_monitor as mod
-        mod._rebalancer_group_cache.clear()
-
-        # Seed with a very old cache entry
-        old_group = MagicMock()
-        mod._rebalancer_group_cache[(42, "USD")] = (old_group, 0.0)  # monotonic=0 is ancient
-
-        fresh_group = MagicMock()
-        mock_result = MagicMock()
-        mock_result.scalar_one_or_none.return_value = fresh_group
-        db = MagicMock()
-        db.execute = AsyncMock(return_value=mock_result)
-
-        from app.multi_bot_monitor import _get_bot_rebalancer_group
-        result = await _get_bot_rebalancer_group(db, 42, "USD")
-        assert result is fresh_group
-
-
-# ===========================================================================
 # Class: TestGetStatus
 # ===========================================================================
 
@@ -1191,51 +1041,6 @@ class TestGetStatus:
             result = await monitor.get_status()
         # Method returns None on exception (logger.error path); assert it didn't raise
         assert result is None or isinstance(result, dict)
-
-
-# ===========================================================================
-# Class: TestFilterPairsByCategoriesAdvanced
-# ===========================================================================
-
-
-class TestFilterPairsByCategoriesAdvanced:
-    """Additional category filter tests covering user override precedence."""
-
-    @pytest.mark.asyncio
-    async def test_user_override_takes_precedence(self, db_session):
-        """User override's category wins over the global entry's category."""
-        pairs = ["DOGE-BTC"]
-
-        # Global entry: MEME (should be filtered out under APPROVED-only allow)
-        # User override: APPROVED (should be allowed)
-        mock_global = MagicMock()
-        mock_global.symbol = "DOGE"
-        mock_global.reason = "[MEME] meme coin"
-        mock_global.user_id = None
-
-        mock_override = MagicMock()
-        mock_override.symbol = "DOGE"
-        mock_override.reason = "[APPROVED] I like it"
-        mock_override.user_id = 42
-
-        # First call returns global entries, second call returns overrides
-        call_count = {"n": 0}
-
-        def execute_side_effect(query):
-            call_count["n"] += 1
-            mock_result = MagicMock()
-            if call_count["n"] == 1:
-                mock_result.scalars.return_value.all.return_value = [mock_global]
-            else:
-                mock_result.scalars.return_value.all.return_value = [mock_override]
-            return mock_result
-
-        db_session.execute = AsyncMock(side_effect=execute_side_effect)
-
-        result = await filter_pairs_by_allowed_categories(
-            db_session, pairs, ["APPROVED"], user_id=42,
-        )
-        assert "DOGE-BTC" in result
 
 
 # ===========================================================================
