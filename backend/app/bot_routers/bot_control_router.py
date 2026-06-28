@@ -7,6 +7,7 @@ Respects seasonality restrictions when enabled.
 
 import asyncio
 from app.utils.timeutil import utcnow
+from app.bot_routers._shared import bot_write_filter
 import logging
 from datetime import timedelta
 
@@ -17,18 +18,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.database import get_db
 from app.models import Bot, Position, Settings, User
 from app.auth.dependencies import require_permission, Perm
-from app.services.account_access import manager_account_ids
 from app.services.season_detector import get_seasonality_status
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
-
-
-async def _bot_write_filter(db, current_user_id: int):
-    """Filter clause allowing access to bots the user owns OR manages."""
-    from sqlalchemy import or_
-    mgr_ids = await manager_account_ids(db, current_user_id)
-    return or_(Bot.user_id == current_user_id, Bot.account_id.in_(mgr_ids))
 
 
 async def check_seasonality_allows_bot(db: AsyncSession, bot: Bot) -> tuple[bool, str | None]:
@@ -71,7 +64,7 @@ async def start_bot(
     current_user: User = Depends(require_permission(Perm.BOTS_WRITE))
 ):
     """Activate a bot to start trading (respects seasonality restrictions)"""
-    query = select(Bot).where(Bot.id == bot_id, await _bot_write_filter(db, current_user.id))
+    query = select(Bot).where(Bot.id == bot_id, await bot_write_filter(db, current_user.id))
     result = await db.execute(query)
     bot = result.scalars().first()
 
@@ -115,7 +108,7 @@ async def stop_bot(
     current_user: User = Depends(require_permission(Perm.BOTS_WRITE))
 ):
     """Deactivate a bot to stop trading"""
-    query = select(Bot).where(Bot.id == bot_id, await _bot_write_filter(db, current_user.id))
+    query = select(Bot).where(Bot.id == bot_id, await bot_write_filter(db, current_user.id))
     result = await db.execute(query)
     bot = result.scalars().first()
 
@@ -156,7 +149,7 @@ async def force_run_bot(
     current_user: User = Depends(require_permission(Perm.BOTS_WRITE))
 ):
     """Force bot to run immediately on next monitor cycle"""
-    query = select(Bot).where(Bot.id == bot_id, await _bot_write_filter(db, current_user.id))
+    query = select(Bot).where(Bot.id == bot_id, await bot_write_filter(db, current_user.id))
     result = await db.execute(query)
     bot = result.scalars().first()
 
@@ -199,7 +192,7 @@ async def cancel_all_positions(
         raise HTTPException(status_code=400, detail="Must confirm with confirm=true")
 
     # Get bot — accessible to owner and managers
-    query = select(Bot).where(Bot.id == bot_id, await _bot_write_filter(db, current_user.id))
+    query = select(Bot).where(Bot.id == bot_id, await bot_write_filter(db, current_user.id))
     result = await db.execute(query)
     bot = result.scalars().first()
     if not bot:
@@ -254,7 +247,7 @@ async def sell_all_positions(
         raise HTTPException(status_code=400, detail="Must confirm with confirm=true")
 
     # Get bot — accessible to owner and managers
-    query = select(Bot).where(Bot.id == bot_id, await _bot_write_filter(db, current_user.id))
+    query = select(Bot).where(Bot.id == bot_id, await bot_write_filter(db, current_user.id))
     result = await db.execute(query)
     bot = result.scalars().first()
     if not bot:

@@ -374,6 +374,20 @@ def _make_aiohttp_session(response_or_error):
     return outer_cm
 
 
+def _make_shared_session(response_or_error):
+    """Mock pooled session (from get_shared_session) whose .get() returns the
+    response context manager, or raises on error."""
+    mock_session = MagicMock()
+    if isinstance(response_or_error, Exception):
+        mock_session.get.side_effect = response_or_error
+    else:
+        cm = MagicMock()
+        cm.__aenter__ = AsyncMock(return_value=response_or_error)
+        cm.__aexit__ = AsyncMock(return_value=False)
+        mock_session.get.return_value = cm
+    return mock_session
+
+
 class TestFetchFearGreed:
     """Tests for fetch_fear_greed()."""
 
@@ -417,9 +431,9 @@ class TestFetchAthData:
                 "ath_date": {"usd": "2025-01-01T00:00:00Z"},
             }
         })
-        session = _make_aiohttp_session(response)
+        session = _make_shared_session(response)
 
-        with patch("app.services.season_detector.aiohttp.ClientSession", return_value=session):
+        with patch("app.services.season_detector.get_shared_session", new=AsyncMock(return_value=session)):
             result = await fetch_ath_data()
 
         assert result is not None
@@ -431,9 +445,9 @@ class TestFetchAthData:
     @pytest.mark.asyncio
     async def test_returns_none_on_api_error(self):
         """Failure: returns None on API error."""
-        session = _make_aiohttp_session(Exception("API down"))
+        session = _make_shared_session(Exception("API down"))
 
-        with patch("app.services.season_detector.aiohttp.ClientSession", return_value=session):
+        with patch("app.services.season_detector.get_shared_session", new=AsyncMock(return_value=session)):
             result = await fetch_ath_data()
 
         assert result is None
@@ -453,9 +467,9 @@ class TestFetchBtcDominance:
         response = _make_aiohttp_response(200, {
             "data": {"market_cap_percentage": {"btc": 58.5}}
         })
-        session = _make_aiohttp_session(response)
+        session = _make_shared_session(response)
 
-        with patch("app.services.season_detector.aiohttp.ClientSession", return_value=session):
+        with patch("app.services.season_detector.get_shared_session", new=AsyncMock(return_value=session)):
             result = await fetch_btc_dominance()
 
         assert result == pytest.approx(58.5)
@@ -463,9 +477,9 @@ class TestFetchBtcDominance:
     @pytest.mark.asyncio
     async def test_returns_none_on_failure(self):
         """Failure: returns None on API failure."""
-        session = _make_aiohttp_session(Exception("timeout"))
+        session = _make_shared_session(Exception("timeout"))
 
-        with patch("app.services.season_detector.aiohttp.ClientSession", return_value=session):
+        with patch("app.services.season_detector.get_shared_session", new=AsyncMock(return_value=session)):
             result = await fetch_btc_dominance()
 
         assert result is None
